@@ -10,6 +10,7 @@ import {
 } from "./lib/motion";
 import { GAME_ACTIONS, GAME_PHASES, GameProvider, useGame } from "./context/GameContext";
 import ProcessingSpeedGame from "./components/ProcessingSpeedGame";
+import WorkingMemoryGame from "./components/WorkingMemoryGame";
 
 const SEQUENCE = [3, 2, 1, "GO!"];
 const GAME_STEPS = [
@@ -199,24 +200,6 @@ const PlaceholderGameCard = ({
   );
 };
 
-const WorkingMemoryGame = ({ onComplete, variants }) => (
-  <PlaceholderGameCard
-    title="Working Memory"
-    description="Placeholder mini-game. Final implementation will test dual recall under timed pressure."
-    ctaLabel="Complete Working Memory"
-    variants={variants}
-    buildScore={(elapsedMs, finishedAt) => ({
-      score: {
-        accuracy: 0.84,
-        timeTakenMs: elapsedMs,
-        raw: { rounds: 6, perfectRounds: 4 },
-      },
-      metrics: { finishedAt, elapsedMs },
-    })}
-    onComplete={(score, metrics) => onComplete(GAME_PHASES.WORKING_MEMORY, score, metrics)}
-  />
-);
-
 const SpatialMemoryGame = ({ onComplete, variants }) => (
   <PlaceholderGameCard
     title="Spatial Memory"
@@ -377,7 +360,16 @@ const GameEngineInner = () => {
       />
     );
   } else if (state.phase === GAME_PHASES.WORKING_MEMORY) {
-    renderedPhase = <WorkingMemoryGame onComplete={handleGameComplete} variants={panelVariant} />;
+    renderedPhase = (
+      <WorkingMemoryGame
+        onComplete={(gameName, score, metrics) => {
+          if (gameName !== "memory") {
+            throw new Error(`WorkingMemoryGame returned unexpected gameName: ${gameName}`);
+          }
+          handleGameComplete(GAME_PHASES.WORKING_MEMORY, score, metrics);
+        }}
+      />
+    );
   } else if (state.phase === GAME_PHASES.SPATIAL_MEMORY) {
     renderedPhase = <SpatialMemoryGame onComplete={handleGameComplete} variants={panelVariant} />;
   } else {
