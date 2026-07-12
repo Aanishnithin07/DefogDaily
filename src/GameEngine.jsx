@@ -11,6 +11,7 @@ import {
 import { GAME_ACTIONS, GAME_PHASES, GameProvider, useGame } from "./context/GameContext";
 import ProcessingSpeedGame from "./components/ProcessingSpeedGame";
 import WorkingMemoryGame from "./components/WorkingMemoryGame";
+import SpatialMemoryGame from "./components/SpatialMemoryGame";
 
 const SEQUENCE = [3, 2, 1, "GO!"];
 const GAME_STEPS = [
@@ -160,62 +161,7 @@ const Countdown = ({ onComplete }) => {
   );
 };
 
-const PlaceholderGameCard = ({
-  title,
-  description,
-  ctaLabel,
-  onComplete,
-  buildScore,
-  variants,
-}) => {
-  const phaseStartedAtRef = useRef(performance.now());
-
-  const handleComplete = () => {
-    const finishedAt = performance.now();
-    const elapsedMs = Math.round(finishedAt - phaseStartedAtRef.current);
-    const { score, metrics } = buildScore(elapsedMs, finishedAt);
-    onComplete(score, metrics);
-  };
-
-  return (
-    <motion.section
-      variants={variants}
-      initial="hidden"
-      animate="show"
-      exit="hidden"
-      className="rounded-3xl-soft border border-white/10 bg-bg-card/70 p-6 backdrop-blur-xl"
-    >
-      <h2 className="font-display text-2xl text-text-primary">{title}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-text-secondary">{description}</p>
-      <motion.button
-        type="button"
-        onClick={handleComplete}
-        whileTap={{ scale: 0.98 }}
-        transition={springTap}
-        className="mt-6 min-h-11 rounded-2xl-soft border border-white/15 px-5 py-3 text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet"
-      >
-        {ctaLabel}
-      </motion.button>
-    </motion.section>
-  );
-};
-
-const SpatialMemoryGame = ({ onComplete, variants }) => (
-  <PlaceholderGameCard
-    title="Spatial Memory"
-    description="Placeholder mini-game. Final implementation will measure progressive load across a spatial recall grid."
-    ctaLabel="Complete Spatial Memory"
-    variants={variants}
-    buildScore={(elapsedMs, finishedAt) => ({
-      score: {
-        levelReached: Math.min(9, Math.max(4, Math.round(elapsedMs / 1200))),
-        raw: { maxCorrectStreak: 5 },
-      },
-      metrics: { finishedAt, elapsedMs },
-    })}
-    onComplete={(score, metrics) => onComplete(GAME_PHASES.SPATIAL_MEMORY, score, metrics)}
-  />
-);
+// SpatialMemoryGame imported from components
 
 const ProgressIndicator = ({ phase }) => {
   const activeIndex = GAME_STEPS.indexOf(phase);
@@ -371,7 +317,17 @@ const GameEngineInner = () => {
       />
     );
   } else if (state.phase === GAME_PHASES.SPATIAL_MEMORY) {
-    renderedPhase = <SpatialMemoryGame onComplete={handleGameComplete} variants={panelVariant} />;
+    renderedPhase = (
+      <SpatialMemoryGame
+        variants={panelVariant}
+        onComplete={(gameName, score, metrics) => {
+          if (gameName !== "spatial") {
+            throw new Error(`SpatialMemoryGame returned unexpected gameName: ${gameName}`);
+          }
+          handleGameComplete(GAME_PHASES.SPATIAL_MEMORY, score.score, score.metrics);
+        }}
+      />
+    );
   } else {
     renderedPhase = (
       <ResultsPanel
