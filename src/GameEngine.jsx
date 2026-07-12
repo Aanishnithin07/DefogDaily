@@ -12,6 +12,7 @@ import { GAME_ACTIONS, GAME_PHASES, GameProvider, useGame } from "./context/Game
 import ProcessingSpeedGame from "./components/ProcessingSpeedGame";
 import WorkingMemoryGame from "./components/WorkingMemoryGame";
 import SpatialMemoryGame from "./components/SpatialMemoryGame";
+import ResultsDashboard from "./components/ResultsDashboard";
 
 const SEQUENCE = [3, 2, 1, "GO!"];
 const GAME_STEPS = [
@@ -193,29 +194,7 @@ const ProgressIndicator = ({ phase }) => {
   );
 };
 
-const ResultsPanel = ({ scores, startedAt, phaseEndRef, variants, onReset }) => {
-  const completedAt = phaseEndRef.current[GAME_PHASES.SPATIAL_MEMORY] ?? performance.now();
-  const totalTimeMs = startedAt ? Math.round(completedAt - startedAt) : 0;
-
-  return (
-    <motion.section variants={variants} initial="hidden" animate="show" exit="hidden">
-      <h2 className="font-display text-3xl text-text-primary">Baseline Complete</h2>
-      <p className="mt-2 text-text-secondary">
-        Your session finished in <span className="font-mono text-text-primary">{totalTimeMs}ms</span>.
-      </p>
-      <pre className="mt-5 overflow-x-auto rounded-3xl-soft border border-white/10 bg-bg-card/70 p-4 font-mono text-xs text-text-secondary">
-        {JSON.stringify(scores, null, 2)}
-      </pre>
-      <button
-        type="button"
-        onClick={onReset}
-        className="mt-5 min-h-11 rounded-2xl-soft border border-white/15 px-5 py-3 text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
-      >
-        Run Again
-      </button>
-    </motion.section>
-  );
-};
+// ResultsPanel replaced by ResultsDashboard
 
 const GameEngineInner = () => {
   const { state, dispatch } = useGame();
@@ -330,11 +309,8 @@ const GameEngineInner = () => {
     );
   } else {
     renderedPhase = (
-      <ResultsPanel
-        scores={state.scores}
-        startedAt={state.startedAt}
-        phaseEndRef={phaseEndRef}
-        variants={panelVariant}
+      <ResultsDashboard
+        rawScores={state.scores}
         onReset={resetScan}
       />
     );
