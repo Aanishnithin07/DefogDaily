@@ -18,6 +18,7 @@ import {
   staggerContainer,
   useReducedMotionVariant,
 } from "./lib/motion";
+import { trackEvent } from "./lib/analytics";
 
 const VALUE_PROPS_ID = "value-props";
 
@@ -148,7 +149,10 @@ export default function Landing({ onStartScan }) {
           <span className="font-display text-lg tracking-wide text-text-primary">DefogDaily</span>
           <button
             type="button"
-            onClick={onStartScan}
+            onClick={() => {
+              trackEvent("cta_clicked", { location: "hero" });
+              onStartScan();
+            }}
             className="min-h-11 rounded-2xl-soft border border-white/10 px-4 text-sm text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
           >
             Start Scan
@@ -225,7 +229,10 @@ export default function Landing({ onStartScan }) {
               <motion.div variants={revealUp} className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <motion.button
                   type="button"
-                  onClick={onStartScan}
+                  onClick={() => {
+                    trackEvent("cta_clicked", { location: "value_props" });
+                    onStartScan();
+                  }}
                   onMouseMove={onPrimaryMouseMove}
                   onMouseLeave={onPrimaryMouseLeave}
                   whileTap={allowSpatialMotion ? { scale: 0.98 } : undefined}

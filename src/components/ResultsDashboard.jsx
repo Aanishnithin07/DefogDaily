@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { animate, motion, useMotionValue, useReducedMotion, AnimatePresence } from "framer-motion";
 import { Share2, Zap, Brain, Grid3X3, Copy } from "lucide-react";
 import confetti from "canvas-confetti";
+import { trackEvent } from "../lib/analytics";
 import { normalizeScores } from "../lib/scoring";
 import { defogReveal, fadeInUp, staggerContainer, useReducedMotionVariant } from "../lib/motion";
 
@@ -74,6 +75,7 @@ export default function ResultsDashboard({ rawScores, onReset }) {
   ];
 
   const handleShare = async () => {
+    trackEvent("share_clicked");
     const text = `DefogDaily Baseline 🧠 | Overall: ${scores.aggregate}\n⚡️ Speed: ${scores.speed} | 🧩 Memory: ${scores.memory} | 🗺️ Spatial: ${scores.spatial}\nClear your fog at defogdaily.com`;
 
     confetti({
@@ -213,6 +215,7 @@ export default function ResultsDashboard({ rawScores, onReset }) {
 
         <button
           type="button"
+          onClick={() => trackEvent("cta_clicked", { location: "results" })}
           className="mt-2 text-sm text-text-secondary transition hover:text-text-primary"
         >
           Create Free Account to Save Your Progress

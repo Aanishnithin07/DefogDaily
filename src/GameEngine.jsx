@@ -8,6 +8,7 @@ import {
   springTap,
   useReducedMotionVariant,
 } from "./lib/motion";
+import { trackEvent } from "./lib/analytics";
 import { GAME_ACTIONS, GAME_PHASES, GameProvider, useGame } from "./context/GameContext";
 import ProcessingSpeedGame from "./components/ProcessingSpeedGame";
 import WorkingMemoryGame from "./components/WorkingMemoryGame";
@@ -196,7 +197,7 @@ const ProgressIndicator = ({ phase }) => {
 
 // ResultsPanel replaced by ResultsDashboard
 
-const GameEngineInner = () => {
+const GameEngineInner = ({ onResetToLanding }) => {
   const { state, dispatch } = useGame();
   const prefersReducedMotion = useReducedMotion();
   const [announcement, setAnnouncement] = useState(PHASE_ANNOUNCEMENTS[GAME_PHASES.INTRO]);
@@ -217,11 +218,16 @@ const GameEngineInner = () => {
     if (previous !== state.phase && !phaseEndRef.current[previous]) {
       phaseEndRef.current[previous] = now;
     }
+    if (state.phase === GAME_PHASES.RESULTS && previous !== GAME_PHASES.RESULTS) {
+      trackEvent("scan_finished", { finalScores: state.scores });
+    }
+
     previousPhaseRef.current = state.phase;
     setAnnouncement(PHASE_ANNOUNCEMENTS[state.phase]);
-  }, [state.phase]);
+  }, [state.phase, state.scores]);
 
   const startScan = () => {
+    trackEvent("scan_started");
     const startedAt = performance.now();
     dispatch({
       type: GAME_ACTIONS.START_SCAN,
@@ -243,6 +249,8 @@ const GameEngineInner = () => {
     const phaseElapsedMs = Math.round(completedAt - phaseStartedAt);
 
     phaseEndRef.current[gameName] = completedAt;
+    
+    trackEvent("game_completed", { gameName, score });
 
     dispatch({
       type: GAME_ACTIONS.GAME_COMPLETE,
@@ -311,7 +319,7 @@ const GameEngineInner = () => {
     renderedPhase = (
       <ResultsDashboard
         rawScores={state.scores}
-        onReset={resetScan}
+        onReset={onResetToLanding}
       />
     );
   }
@@ -336,10 +344,10 @@ const GameEngineInner = () => {
   );
 };
 
-export default function GameEngine() {
+export default function GameEngine({ onResetToLanding }) {
   return (
     <GameProvider>
-      <GameEngineInner />
+      <GameEngineInner onResetToLanding={onResetToLanding} />
     </GameProvider>
   );
 }
