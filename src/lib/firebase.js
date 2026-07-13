@@ -39,4 +39,4 @@ export const logout = async () => {
   return signOut(auth);
 };
 
-export { auth, db, isConfigured };
+export { app, auth, db, isConfigured };

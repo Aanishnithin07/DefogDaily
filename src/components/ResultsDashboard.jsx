@@ -7,6 +7,7 @@ import { normalizeScores } from "../lib/scoring";
 import { defogReveal, fadeInUp, staggerContainer, useReducedMotionVariant } from "../lib/motion";
 import { useAuth } from "../context/AuthContext";
 import { saveScore } from "../lib/firestore";
+import AiCoachPanel from "./AiCoachPanel";
 
 const RadarChart = lazy(() =>
   import("recharts").then((mod) => ({ default: mod.RadarChart }))
@@ -194,6 +195,8 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
           variants={up}
         />
       </div>
+
+      <AiCoachPanel scores={scores} />
 
       <motion.div variants={up} className="mt-12 flex flex-col items-center gap-4">
         <div className="relative">
