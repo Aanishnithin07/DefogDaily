@@ -5,6 +5,8 @@ import confetti from "canvas-confetti";
 import { trackEvent } from "../lib/analytics";
 import { normalizeScores } from "../lib/scoring";
 import { defogReveal, fadeInUp, staggerContainer, useReducedMotionVariant } from "../lib/motion";
+import { useAuth } from "../context/AuthContext";
+import { saveScore } from "../lib/firestore";
 
 const RadarChart = lazy(() =>
   import("recharts").then((mod) => ({ default: mod.RadarChart }))
@@ -38,10 +40,19 @@ const DomainCard = ({ title, score, icon: Icon, tier, variants }) => (
   </motion.div>
 );
 
-export default function ResultsDashboard({ rawScores, onReset }) {
+export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) {
   const prefersReducedMotion = useReducedMotion();
   const scores = useMemo(() => normalizeScores(rawScores), [rawScores]);
   const [toast, setToast] = useState("");
+  const { currentUser, signInWithGoogle, isConfigured } = useAuth();
+  const [hasSaved, setHasSaved] = useState(false);
+
+  useEffect(() => {
+    if (currentUser && !hasSaved) {
+      saveScore(currentUser.uid, rawScores, scores);
+      setHasSaved(true);
+    }
+  }, [currentUser, hasSaved, rawScores, scores]);
 
   // Big score counter
   const scoreValue = useMotionValue(0);
@@ -213,13 +224,39 @@ export default function ResultsDashboard({ rawScores, onReset }) {
           </AnimatePresence>
         </div>
 
-        <button
-          type="button"
-          onClick={() => trackEvent("cta_clicked", { location: "results" })}
-          className="mt-2 text-sm text-text-secondary transition hover:text-text-primary"
-        >
-          Create Free Account to Save Your Progress
-        </button>
+        {!currentUser ? (
+          <button
+            type="button"
+            onClick={async () => {
+              trackEvent("cta_clicked", { location: "results" });
+              if (!isConfigured) {
+                setToast("Backend not configured. Add Firebase keys to .env.");
+                setTimeout(() => setToast(""), 3000);
+                return;
+              }
+              try {
+                await signInWithGoogle();
+                setToast("Signed in! Score saved.");
+                setTimeout(() => setToast(""), 3000);
+              } catch (err) {
+                console.error("Sign in failed", err);
+              }
+            }}
+            className="mt-2 text-sm text-text-secondary transition hover:text-text-primary"
+          >
+            Create Free Account to Save Your Progress
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (onViewHistory) onViewHistory();
+            }}
+            className="mt-2 text-sm text-accent-cyan transition hover:opacity-80"
+          >
+            View Your History Dashboard →
+          </button>
+        )}
         
         <button
           type="button"

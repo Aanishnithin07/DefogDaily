@@ -197,7 +197,7 @@ const ProgressIndicator = ({ phase }) => {
 
 // ResultsPanel replaced by ResultsDashboard
 
-const GameEngineInner = ({ onResetToLanding }) => {
+const GameEngineInner = ({ onResetToLanding, onViewHistory }) => {
   const { state, dispatch } = useGame();
   const prefersReducedMotion = useReducedMotion();
   const [announcement, setAnnouncement] = useState(PHASE_ANNOUNCEMENTS[GAME_PHASES.INTRO]);
@@ -320,6 +320,7 @@ const GameEngineInner = ({ onResetToLanding }) => {
       <ResultsDashboard
         rawScores={state.scores}
         onReset={onResetToLanding}
+        onViewHistory={onViewHistory}
       />
     );
   }
@@ -344,10 +345,10 @@ const GameEngineInner = ({ onResetToLanding }) => {
   );
 };
 
-export default function GameEngine({ onResetToLanding }) {
+export default function GameEngine({ onResetToLanding, onViewHistory }) {
   return (
     <GameProvider>
-      <GameEngineInner onResetToLanding={onResetToLanding} />
+      <GameEngineInner onResetToLanding={onResetToLanding} onViewHistory={onViewHistory} />
     </GameProvider>
   );
 }

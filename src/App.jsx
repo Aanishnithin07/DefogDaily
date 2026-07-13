@@ -2,6 +2,8 @@ import { Component, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Landing from "./Landing";
 import GameEngine from "./GameEngine";
+import HistoryDashboard from "./components/HistoryDashboard";
+import { AuthProvider } from "./context/AuthContext";
 
 class RootErrorBoundary extends Component {
   constructor(props) {
@@ -41,35 +43,53 @@ class RootErrorBoundary extends Component {
 }
 
 function App() {
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentView, setCurrentView] = useState("landing");
 
   return (
-    <RootErrorBoundary>
-      <AnimatePresence mode="wait">
-        {!isPlaying ? (
-          <motion.div
-            key="landing"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-          >
-            <Landing onStartScan={() => setIsPlaying(true)} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="game-engine"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.4, ease: "easeInOut" }}
-            className="min-h-screen"
-          >
-            <GameEngine onResetToLanding={() => setIsPlaying(false)} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </RootErrorBoundary>
+    <AuthProvider>
+      <RootErrorBoundary>
+        <AnimatePresence mode="wait">
+          {currentView === "landing" && (
+            <motion.div
+              key="landing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+            >
+              <Landing onStartScan={() => setCurrentView("game")} />
+            </motion.div>
+          )}
+          {currentView === "game" && (
+            <motion.div
+              key="game-engine"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="min-h-screen"
+            >
+              <GameEngine 
+                onResetToLanding={() => setCurrentView("landing")} 
+                onViewHistory={() => setCurrentView("history")}
+              />
+            </motion.div>
+          )}
+          {currentView === "history" && (
+            <motion.div
+              key="history"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="min-h-screen"
+            >
+              <HistoryDashboard onBack={() => setCurrentView("landing")} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </RootErrorBoundary>
+    </AuthProvider>
   );
 }
 
