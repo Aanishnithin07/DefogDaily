@@ -150,8 +150,8 @@ export default function Landing({ onStartScan }) {
           <button
             type="button"
             onClick={() => {
-              trackEvent("cta_clicked", { location: "hero" });
-              onStartScan();
+              trackEvent("cta_clicked", { location: "hero", mode: "daily" });
+              onStartScan("daily");
             }}
             className="min-h-11 rounded-2xl-soft border border-white/10 px-4 text-sm text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
           >
@@ -230,8 +230,8 @@ export default function Landing({ onStartScan }) {
                 <motion.button
                   type="button"
                   onClick={() => {
-                    trackEvent("cta_clicked", { location: "value_props" });
-                    onStartScan();
+                    trackEvent("cta_clicked", { location: "value_props", mode: "daily" });
+                    onStartScan("daily");
                   }}
                   onMouseMove={onPrimaryMouseMove}
                   onMouseLeave={onPrimaryMouseLeave}
@@ -243,14 +243,17 @@ export default function Landing({ onStartScan }) {
                   }}
                   className="min-h-11 rounded-2xl-soft bg-accent-cyan px-6 py-3 font-medium text-bg-base shadow-glow-cyan transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                 >
-                  Start Your Free Brain Scan
+                  Start Daily Challenge
                 </motion.button>
                 <button
                   type="button"
-                  onClick={scrollToValueProps}
+                  onClick={() => {
+                    trackEvent("cta_clicked", { location: "value_props", mode: "practice" });
+                    onStartScan("practice");
+                  }}
                   className="min-h-11 rounded-2xl-soft border border-white/15 px-6 py-3 text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet"
                 >
-                  See How It Works
+                  Play Practice Mode
                 </button>
               </motion.div>
             </motion.div>

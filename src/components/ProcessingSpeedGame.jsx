@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getRandom } from "../lib/random";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
 
 const TEST_DURATION_MS = 30_000;
 const INPUT_LOCK_MS = 170;
 
+function randomInt(min, max) {
+  return Math.floor(getRandom() * (max - min + 1)) + min;
+}
+
 const pickDigitsForElapsed = (elapsedMs) => {
   const progress = elapsedMs / TEST_DURATION_MS;
-  if (progress < 0.4) return Math.random() < 0.5 ? 1 : 2;
-  if (progress < 0.8) return Math.random() < 0.35 ? 2 : 3;
-  return 3;
+  if (progress < 0.4) return getRandom() < 0.5 ? 1 : 2;
+  if (progress < 0.8) return getRandom() < 0.35 ? 2 : 3;
+  return getRandom() < 0.2 ? 3 : 4;
 };
 
 const randomNumberByDigits = (digits) => {
   const min = digits === 1 ? 1 : 10 ** (digits - 1);
   const max = 10 ** digits - 1;
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  return randomInt(min, max);
 };
 
 const nextDistinctNumber = (previous, elapsedMs) => {

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense, useRef } from "react";
 import { animate, motion, useMotionValue, useReducedMotion, AnimatePresence } from "framer-motion";
+import * as htmlToImage from "html-to-image";
 import { Share2, Zap, Brain, Grid3X3, Copy } from "lucide-react";
 import confetti from "canvas-confetti";
 import { trackEvent } from "../lib/analytics";
@@ -45,6 +46,7 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
   const prefersReducedMotion = useReducedMotion();
   const scores = useMemo(() => normalizeScores(rawScores), [rawScores]);
   const [toast, setToast] = useState("");
+  const snapshotRef = useRef(null);
   const { currentUser, signInWithGoogle, isConfigured } = useAuth();
   const [hasSaved, setHasSaved] = useState(false);
 
@@ -98,11 +100,26 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
       disableForReducedMotion: true,
     });
 
-    if (navigator.share) {
+    let dataUrl = null;
+    let file = null;
+
+    try {
+      if (snapshotRef.current) {
+        dataUrl = await htmlToImage.toPng(snapshotRef.current, { backgroundColor: '#0B0E14', pixelRatio: 2 });
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        file = new File([blob], "defog-daily-score.png", { type: "image/png" });
+      }
+    } catch (e) {
+      console.error("Failed to generate image snapshot", e);
+    }
+
+    if (navigator.share && file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({
           title: "My DefogDaily Scan",
           text: text,
+          files: [file]
         });
         return;
       } catch (e) {
@@ -112,7 +129,15 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
 
     try {
       await navigator.clipboard.writeText(text);
-      setToast("Copied! Paste it anywhere.");
+      if (dataUrl) {
+        const link = document.createElement("a");
+        link.download = "defog-daily-score.png";
+        link.href = dataUrl;
+        link.click();
+        setToast("Score Image Downloaded & Text Copied!");
+      } else {
+        setToast("Copied to clipboard!");
+      }
       setTimeout(() => setToast(""), 3000);
     } catch (err) {
       console.error("Failed to copy", err);
@@ -126,6 +151,7 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
       animate="show"
       className="mx-auto flex w-full max-w-4xl flex-col items-center pb-12"
     >
+      <div ref={snapshotRef} className="flex w-full flex-col items-center pb-8 pt-4">
       {/* SVG filter for the radar neon glow */}
       <svg width="0" height="0">
         <filter id="neon-glow">
@@ -194,6 +220,8 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
           tier={getTier(scores.spatial)}
           variants={up}
         />
+      </div>
+
       </div>
 
       <AiCoachPanel scores={scores} />

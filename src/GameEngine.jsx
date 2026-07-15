@@ -14,6 +14,7 @@ import ProcessingSpeedGame from "./components/ProcessingSpeedGame";
 import WorkingMemoryGame from "./components/WorkingMemoryGame";
 import SpatialMemoryGame from "./components/SpatialMemoryGame";
 import ResultsDashboard from "./components/ResultsDashboard";
+import { initializeRandomizer } from "./lib/random";
 
 const SEQUENCE = [3, 2, 1, "GO!"];
 const GAME_STEPS = [
@@ -345,7 +346,11 @@ const GameEngineInner = ({ onResetToLanding, onViewHistory }) => {
   );
 };
 
-export default function GameEngine({ onResetToLanding, onViewHistory }) {
+export default function GameEngine({ mode, onResetToLanding, onViewHistory }) {
+  useEffect(() => {
+    initializeRandomizer(mode);
+  }, [mode]);
+
   return (
     <GameProvider>
       <GameEngineInner onResetToLanding={onResetToLanding} onViewHistory={onViewHistory} />

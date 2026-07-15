@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check } from "lucide-react";
 import { springTap } from "../lib/motion";
+import { getRandom, shuffleArray } from "../lib/random";
 
 const GRID_SIZE = 25; // 5x5
 const INITIAL_LIT = 4;
@@ -21,7 +22,7 @@ export default function SpatialMemoryGame({ onComplete, variants }) {
     
     let newTargets = [];
     while (newTargets.length < numToLight) {
-      const rand = Math.floor(Math.random() * GRID_SIZE);
+      const rand = Math.floor(getRandom() * GRID_SIZE);
       if (!newTargets.includes(rand)) {
         newTargets.push(rand);
       }

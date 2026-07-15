@@ -44,6 +44,12 @@ class RootErrorBoundary extends Component {
 
 function App() {
   const [currentView, setCurrentView] = useState("landing");
+  const [gameMode, setGameMode] = useState("practice"); // 'daily' or 'practice'
+
+  const handleStartScan = (mode = "practice") => {
+    setGameMode(mode);
+    setCurrentView("game");
+  };
 
   return (
     <AuthProvider>
@@ -57,7 +63,7 @@ function App() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3, ease: "easeInOut" }}
             >
-              <Landing onStartScan={() => setCurrentView("game")} />
+              <Landing onStartScan={handleStartScan} />
             </motion.div>
           )}
           {currentView === "game" && (
@@ -70,6 +76,7 @@ function App() {
               className="min-h-screen"
             >
               <GameEngine 
+                mode={gameMode}
                 onResetToLanding={() => setCurrentView("landing")} 
                 onViewHistory={() => setCurrentView("history")}
               />

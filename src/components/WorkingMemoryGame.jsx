@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { fadeIn, fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
+import { getRandom, shuffleArray } from "../lib/random";
 
 const MEMORIZE_DURATION_MS = 5_000;
 const MAX_SELECTIONS = 5;
@@ -50,19 +51,10 @@ const WORD_CATEGORIES = {
   ],
 };
 
-const shuffle = (items) => {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-};
-
 const createRound = () => {
   const categories = Object.keys(WORD_CATEGORIES);
-  const category = categories[Math.floor(Math.random() * categories.length)];
-  const words = shuffle(WORD_CATEGORIES[category]);
+  const category = categories[Math.floor(getRandom() * categories.length)];
+  const words = shuffleArray(WORD_CATEGORIES[category]);
   const targets = words.slice(0, 5);
   const decoys = words.slice(5, 12);
   return {
