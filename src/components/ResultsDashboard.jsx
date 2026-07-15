@@ -9,6 +9,7 @@ import { defogReveal, fadeInUp, staggerContainer, useReducedMotionVariant } from
 import { useAuth } from "../context/AuthContext";
 import { saveScore } from "../lib/firestore";
 import AiCoachPanel from "./AiCoachPanel";
+import { getRelativeWeakness, useSkillProfile } from "../lib/skillProfile";
 
 const RadarChart = lazy(() =>
   import("recharts").then((mod) => ({ default: mod.RadarChart }))
@@ -49,6 +50,8 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
   const snapshotRef = useRef(null);
   const { currentUser, signInWithGoogle, isConfigured } = useAuth();
   const [hasSaved, setHasSaved] = useState(false);
+  const profile = useSkillProfile();
+  const weakness = profile ? getRelativeWeakness(profile) : null;
 
   useEffect(() => {
     if (currentUser && !hasSaved) {
@@ -232,7 +235,36 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
 
       </div>
 
-      <AiCoachPanel scores={scores} />
+      {weakness ? (
+        <motion.div variants={up} className="mt-12 w-full">
+          <div className="rounded-3xl-soft border border-accent-violet/30 bg-accent-violet/5 p-6 backdrop-blur-xl">
+            <h3 className="font-display text-xl text-text-primary">
+              Focus Area: <span className="text-accent-violet">{weakness.label}</span>
+            </h3>
+            <p className="mt-2 text-sm text-text-secondary leading-relaxed">
+              {weakness.name === "speed" && "Try setting a 2-minute timer for a routine task today (like reading an email or organizing a folder). Force yourself to move deliberately faster than comfortable."}
+              {weakness.name === "memory" && "Next time you need to write down a short list (groceries, tasks), try holding it in your head for 10 minutes first before writing it down."}
+              {weakness.name === "spatial" && "When you walk into a new room today, close your eyes and try to point to 3 objects you just saw."}
+              {weakness.name === "stroop" && "When reading a news headline today, try to count the number of words instead of reading the meaning."}
+            </p>
+          </div>
+        </motion.div>
+      ) : profile && profile.speed.sessions === 1 ? (
+        <motion.div variants={up} className="mt-12 w-full">
+          <div className="rounded-3xl-soft border border-accent-cyan/30 bg-accent-cyan/5 p-6 backdrop-blur-xl">
+            <h3 className="font-display text-xl text-text-primary">
+              Baseline Established
+            </h3>
+            <p className="mt-2 text-sm text-text-secondary leading-relaxed">
+              This is your baseline. Come back tomorrow to see where you're improving!
+            </p>
+          </div>
+        </motion.div>
+      ) : null}
+
+      <div className="mt-8 w-full">
+        <AiCoachPanel scores={scores} />
+      </div>
 
       <motion.div variants={up} className="mt-12 flex flex-col items-center gap-4">
         <div className="relative">

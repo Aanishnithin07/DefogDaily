@@ -10,8 +10,13 @@ function randomInt(min, max) {
   return Math.floor(getRandom() * (max - min + 1)) + min;
 }
 
-const pickDigitsForElapsed = (elapsedMs) => {
-  const progress = elapsedMs / TEST_DURATION_MS;
+const pickDigitsForElapsed = (elapsedMs, initialDifficulty = 0) => {
+  let progress = elapsedMs / TEST_DURATION_MS;
+  // If user has a high rolling average (e.g. > 60), start them at a harder tier
+  if (initialDifficulty > 60) {
+    progress += 0.4;
+  }
+  
   if (progress < 0.4) return getRandom() < 0.5 ? 1 : 2;
   if (progress < 0.8) return getRandom() < 0.35 ? 2 : 3;
   return getRandom() < 0.2 ? 3 : 4;
@@ -23,8 +28,8 @@ const randomNumberByDigits = (digits) => {
   return randomInt(min, max);
 };
 
-const nextDistinctNumber = (previous, elapsedMs) => {
-  const digits = pickDigitsForElapsed(elapsedMs);
+const nextDistinctNumber = (previous, elapsedMs, initialDifficulty) => {
+  const digits = pickDigitsForElapsed(elapsedMs, initialDifficulty);
   let candidate = randomNumberByDigits(digits);
   while (candidate === previous) {
     candidate = randomNumberByDigits(digits);
@@ -32,7 +37,7 @@ const nextDistinctNumber = (previous, elapsedMs) => {
   return candidate;
 };
 
-export default function ProcessingSpeedGame({ onComplete }) {
+export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
   const prefersReducedMotion = useReducedMotion();
 
   const [currentNumber, setCurrentNumber] = useState(null);
@@ -105,7 +110,7 @@ export default function ProcessingSpeedGame({ onComplete }) {
   }, [clearDeferredNext, onComplete]);
 
   const mountNextNumber = useCallback((elapsedMs) => {
-    const next = nextDistinctNumber(lastNumberRef.current, elapsedMs);
+    const next = nextDistinctNumber(lastNumberRef.current, elapsedMs, initialDifficulty);
     lastNumberRef.current = next;
     setCurrentNumber(next);
   }, []);

@@ -9,8 +9,8 @@ const INITIAL_LIT = 4;
 const MAX_LEVELS = 12;
 const MEMORIZE_MS = 3000;
 
-export default function SpatialMemoryGame({ onComplete, variants }) {
-  const [level, setLevel] = useState(1);
+export default function SpatialMemoryGame({ onComplete, variants, initialDifficulty = 0 }) {
+  const [level, setLevel] = useState(initialDifficulty > 60 ? 3 : 1);
   const [phase, setPhase] = useState("memorize"); // memorize, recall, fail, success
   const [targetCells, setTargetCells] = useState([]);
   const [selectedCells, setSelectedCells] = useState([]);

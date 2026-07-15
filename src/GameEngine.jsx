@@ -16,6 +16,8 @@ import StroopTestGame from "./components/StroopTestGame";
 import SpatialMemoryGame from "./components/SpatialMemoryGame";
 import ResultsDashboard from "./components/ResultsDashboard";
 import { initializeRandomizer } from "./lib/random";
+import { getRelativeWeakness, updateSkillProfile, useSkillProfile } from "./lib/skillProfile";
+import { normalizeScores } from "./lib/scoring";
 
 const SEQUENCE = [3, 2, 1, "GO!"];
 const GAME_STEPS = [
@@ -79,13 +81,23 @@ class GameErrorBoundary extends Component {
   }
 }
 
-const IntroPanel = ({ onStart, variants }) => (
+const IntroPanel = ({ onStart, variants, focusArea }) => (
   <motion.section variants={variants} initial="hidden" animate="show" exit="hidden" className="space-y-6">
     <h1 className="font-display text-4xl text-text-primary md:text-5xl">Baseline Brain Scan</h1>
     <p className="max-w-xl text-text-secondary">
       Run a precise 4-step check across processing speed, working memory, interference control, and spatial
       load.
     </p>
+    {focusArea && (
+      <div className="rounded-xl-soft border border-accent-violet/30 bg-accent-violet/10 p-4">
+        <p className="text-sm font-medium text-text-primary">
+          Coach's Note
+        </p>
+        <p className="mt-1 text-sm text-text-secondary">
+          Last time, <span className="text-accent-violet">{focusArea}</span> was your focus area. Let's see how it's tracking today.
+        </p>
+      </div>
+    )}
     <button
       type="button"
       onClick={onStart}
@@ -209,6 +221,10 @@ const GameEngineInner = ({ onResetToLanding, onViewHistory }) => {
   const phaseEndRef = useRef({});
   const previousPhaseRef = useRef(state.phase);
 
+  const profile = useSkillProfile();
+  const weakness = profile ? getRelativeWeakness(profile) : null;
+  const focusArea = weakness?.label;
+
   const panelVariant = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
   const introVariant = useReducedMotionVariant(prefersReducedMotion, scaleIn);
 
@@ -224,6 +240,8 @@ const GameEngineInner = ({ onResetToLanding, onViewHistory }) => {
     }
     if (state.phase === GAME_PHASES.RESULTS && previous !== GAME_PHASES.RESULTS) {
       trackEvent("scan_finished", { finalScores: state.scores });
+      const normalized = normalizeScores(state.scores);
+      updateSkillProfile(normalized);
     }
 
     previousPhaseRef.current = state.phase;
@@ -282,12 +300,13 @@ const GameEngineInner = ({ onResetToLanding, onViewHistory }) => {
 
   let renderedPhase;
   if (state.phase === GAME_PHASES.INTRO) {
-    renderedPhase = <IntroPanel onStart={startScan} variants={introVariant} />;
+    renderedPhase = <IntroPanel onStart={startScan} variants={introVariant} focusArea={focusArea} />;
   } else if (state.phase === GAME_PHASES.COUNTDOWN) {
     renderedPhase = <Countdown onComplete={onCountdownComplete} />;
   } else if (state.phase === GAME_PHASES.PROCESSING_SPEED) {
     renderedPhase = (
       <ProcessingSpeedGame
+        initialDifficulty={profile?.speed?.rollingAverage}
         onComplete={(gameName, score, metrics) => {
           if (gameName !== "speed") {
             throw new Error(`ProcessingSpeedGame returned unexpected gameName: ${gameName}`);
@@ -322,6 +341,7 @@ const GameEngineInner = ({ onResetToLanding, onViewHistory }) => {
     renderedPhase = (
       <SpatialMemoryGame
         variants={panelVariant}
+        initialDifficulty={profile?.spatial?.rollingAverage}
         onComplete={(gameName, score, metrics) => {
           if (gameName !== "spatial") {
             throw new Error(`SpatialMemoryGame returned unexpected gameName: ${gameName}`);
