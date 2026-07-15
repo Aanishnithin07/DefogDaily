@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, lazy, Suspense, useRef } from "react";
 import { animate, motion, useMotionValue, useReducedMotion, AnimatePresence } from "framer-motion";
 import * as htmlToImage from "html-to-image";
-import { Share2, Zap, Brain, Grid3X3, Copy } from "lucide-react";
+import { Share2, Zap, Brain, Grid3X3, Copy, Focus } from "lucide-react";
 import confetti from "canvas-confetti";
 import { trackEvent } from "../lib/analytics";
 import { normalizeScores } from "../lib/scoring";
@@ -85,12 +85,13 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
   const chartData = [
     { subject: "Speed", A: scores.speed, fullMark: 100 },
     { subject: "Memory", A: scores.memory, fullMark: 100 },
+    { subject: "Stroop", A: scores.stroop, fullMark: 100 },
     { subject: "Spatial", A: scores.spatial, fullMark: 100 },
   ];
 
   const handleShare = async () => {
     trackEvent("share_clicked");
-    const text = `DefogDaily Baseline 🧠 | Overall: ${scores.aggregate}\n⚡️ Speed: ${scores.speed} | 🧩 Memory: ${scores.memory} | 🗺️ Spatial: ${scores.spatial}\nClear your fog at defogdaily.com`;
+    const text = `DefogDaily Baseline 🧠 | Overall: ${scores.aggregate}\n⚡️ Speed: ${scores.speed} | 🧩 Memory: ${scores.memory} | 🎯 Stroop: ${scores.stroop} | 🗺️ Spatial: ${scores.spatial}\nClear your fog at defogdaily.com`;
 
     confetti({
       particleCount: 80,
@@ -198,7 +199,7 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
         </Suspense>
       </motion.div>
 
-      <div className="mt-10 grid w-full grid-cols-3 gap-3 md:gap-6">
+      <div className="mt-10 grid w-full grid-cols-2 gap-3 md:grid-cols-4 md:gap-6">
         <DomainCard
           title="Speed"
           score={scores.speed}
@@ -211,6 +212,13 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
           score={scores.memory}
           icon={Brain}
           tier={getTier(scores.memory)}
+          variants={up}
+        />
+        <DomainCard
+          title="Stroop"
+          score={scores.stroop}
+          icon={Focus}
+          tier={getTier(scores.stroop)}
           variants={up}
         />
         <DomainCard

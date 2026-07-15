@@ -25,9 +25,10 @@ export const generateCoachInsight = async (scores) => {
   }
 
   const prompt = `You are the DefogDaily AI Coach. Your personality is clinical but highly encouraging and insightful.
-The user just completed a 3-minute cognitive baseline scan with these scores (0-100 scale, higher is better):
+The user just completed a 4-minute cognitive baseline scan with these scores (0-100 scale, higher is better):
 - Processing Speed: ${scores.speed}
 - Working Memory: ${scores.memory}
+- Interference Control (Stroop): ${scores.stroop}
 - Spatial Memory: ${scores.spatial}
 - Overall Aggregate: ${scores.aggregate}
 

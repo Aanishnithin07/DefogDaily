@@ -20,6 +20,7 @@ export default function HistoryDashboard({ onBack }) {
             name: `Scan ${i + 1}`,
             Speed: d.normalizedScores?.speed || 0,
             Memory: d.normalizedScores?.memory || 0,
+            Stroop: d.normalizedScores?.stroop || 0,
             Spatial: d.normalizedScores?.spatial || 0,
             date: d.timestamp ? new Date(d.timestamp.toMillis()).toLocaleDateString() : "Recent"
           };
@@ -108,6 +109,7 @@ export default function HistoryDashboard({ onBack }) {
                 />
                 <Line type="monotone" dataKey="Speed" stroke="#3ED9D5" strokeWidth={3} dot={{ r: 4, fill: "#0B0E14", strokeWidth: 2 }} activeDot={{ r: 6 }} />
                 <Line type="monotone" dataKey="Memory" stroke="#8A7BFF" strokeWidth={3} dot={{ r: 4, fill: "#0B0E14", strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="Stroop" stroke="#FF5C5C" strokeWidth={3} dot={{ r: 4, fill: "#0B0E14", strokeWidth: 2 }} activeDot={{ r: 6 }} />
                 <Line type="monotone" dataKey="Spatial" stroke="#F5F8FF" strokeWidth={3} dot={{ r: 4, fill: "#0B0E14", strokeWidth: 2 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>

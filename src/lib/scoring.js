@@ -34,13 +34,26 @@ export function normalizeScores(rawScores) {
     spatialScore = Math.min(100, (levelReached / 12) * 100);
   }
 
+  // 4. Stroop (Interference Control)
+  // High penalty for errors, secondary weight on reaction speed
+  let stroopScore = 0;
+  if (rawScores.stroop) {
+    const { accuracy, avgReactionMs } = rawScores.stroop;
+    const clampedReactionMs = Math.max(400, Math.min(2000, avgReactionMs));
+    const reactionBonus = 100 - ((clampedReactionMs - 400) / 1600) * 100;
+    
+    // 85% accuracy, 15% reaction speed
+    stroopScore = (accuracy * 0.85) + (reactionBonus * 0.15);
+  }
+
   // The Big Score
-  const aggregateScore = Math.round((speedScore + memoryScore + spatialScore) / 3);
+  const aggregateScore = Math.round((speedScore + memoryScore + spatialScore + stroopScore) / 4);
 
   return {
     speed: Math.round(speedScore),
     memory: Math.round(memoryScore),
     spatial: Math.round(spatialScore),
+    stroop: Math.round(stroopScore),
     aggregate: aggregateScore,
   };
 }

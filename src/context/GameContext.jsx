@@ -5,6 +5,7 @@ export const GAME_PHASES = {
   COUNTDOWN: "countdown",
   PROCESSING_SPEED: "processing_speed",
   WORKING_MEMORY: "working_memory",
+  STROOP_TEST: "stroop_test",
   SPATIAL_MEMORY: "spatial_memory",
   RESULTS: "results",
 };
@@ -21,6 +22,7 @@ const initialState = {
   scores: {
     speed: null,
     memory: null,
+    stroop: null,
     spatial: null,
   },
   startedAt: null,
@@ -30,7 +32,8 @@ const GameContext = createContext(null);
 
 const getNextPhase = (phase) => {
   if (phase === GAME_PHASES.PROCESSING_SPEED) return GAME_PHASES.WORKING_MEMORY;
-  if (phase === GAME_PHASES.WORKING_MEMORY) return GAME_PHASES.SPATIAL_MEMORY;
+  if (phase === GAME_PHASES.WORKING_MEMORY) return GAME_PHASES.STROOP_TEST;
+  if (phase === GAME_PHASES.STROOP_TEST) return GAME_PHASES.SPATIAL_MEMORY;
   if (phase === GAME_PHASES.SPATIAL_MEMORY) return GAME_PHASES.RESULTS;
   return phase;
 };
@@ -41,6 +44,9 @@ const applyGameScore = (scores, gameName, score) => {
   }
   if (gameName === GAME_PHASES.WORKING_MEMORY) {
     return { ...scores, memory: score };
+  }
+  if (gameName === GAME_PHASES.STROOP_TEST) {
+    return { ...scores, stroop: score };
   }
   if (gameName === GAME_PHASES.SPATIAL_MEMORY) {
     return { ...scores, spatial: score };

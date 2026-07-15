@@ -12,6 +12,7 @@ import { trackEvent } from "./lib/analytics";
 import { GAME_ACTIONS, GAME_PHASES, GameProvider, useGame } from "./context/GameContext";
 import ProcessingSpeedGame from "./components/ProcessingSpeedGame";
 import WorkingMemoryGame from "./components/WorkingMemoryGame";
+import StroopTestGame from "./components/StroopTestGame";
 import SpatialMemoryGame from "./components/SpatialMemoryGame";
 import ResultsDashboard from "./components/ResultsDashboard";
 import { initializeRandomizer } from "./lib/random";
@@ -20,15 +21,17 @@ const SEQUENCE = [3, 2, 1, "GO!"];
 const GAME_STEPS = [
   GAME_PHASES.PROCESSING_SPEED,
   GAME_PHASES.WORKING_MEMORY,
+  GAME_PHASES.STROOP_TEST,
   GAME_PHASES.SPATIAL_MEMORY,
 ];
 
 const PHASE_ANNOUNCEMENTS = {
   [GAME_PHASES.INTRO]: "Baseline Brain Scan intro",
   [GAME_PHASES.COUNTDOWN]: "Get ready. Countdown starting.",
-  [GAME_PHASES.PROCESSING_SPEED]: "Game 1 of 3: Processing Speed",
-  [GAME_PHASES.WORKING_MEMORY]: "Game 2 of 3: Working Memory",
-  [GAME_PHASES.SPATIAL_MEMORY]: "Game 3 of 3: Spatial Memory",
+  [GAME_PHASES.PROCESSING_SPEED]: "Game 1 of 4: Processing Speed",
+  [GAME_PHASES.WORKING_MEMORY]: "Game 2 of 4: Working Memory",
+  [GAME_PHASES.STROOP_TEST]: "Game 3 of 4: Interference Control",
+  [GAME_PHASES.SPATIAL_MEMORY]: "Game 4 of 4: Spatial Memory",
   [GAME_PHASES.RESULTS]: "Scan complete. Results ready.",
 };
 
@@ -80,7 +83,7 @@ const IntroPanel = ({ onStart, variants }) => (
   <motion.section variants={variants} initial="hidden" animate="show" exit="hidden" className="space-y-6">
     <h1 className="font-display text-4xl text-text-primary md:text-5xl">Baseline Brain Scan</h1>
     <p className="max-w-xl text-text-secondary">
-      Run a precise 3-step check across processing speed, working memory, and spatial
+      Run a precise 4-step check across processing speed, working memory, interference control, and spatial
       load.
     </p>
     <button
@@ -88,7 +91,7 @@ const IntroPanel = ({ onStart, variants }) => (
       onClick={onStart}
       className="min-h-11 rounded-2xl-soft bg-accent-cyan px-6 py-3 font-medium text-bg-base shadow-glow-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
     >
-      Begin 3-Minute Scan
+      Begin 4-Minute Scan
     </button>
   </motion.section>
 );
@@ -301,6 +304,17 @@ const GameEngineInner = ({ onResetToLanding, onViewHistory }) => {
             throw new Error(`WorkingMemoryGame returned unexpected gameName: ${gameName}`);
           }
           handleGameComplete(GAME_PHASES.WORKING_MEMORY, score, metrics);
+        }}
+      />
+    );
+  } else if (state.phase === GAME_PHASES.STROOP_TEST) {
+    renderedPhase = (
+      <StroopTestGame
+        onComplete={(gameName, score, metrics) => {
+          if (gameName !== "stroop") {
+            throw new Error(`StroopTestGame returned unexpected gameName: ${gameName}`);
+          }
+          handleGameComplete(GAME_PHASES.STROOP_TEST, score, metrics);
         }}
       />
     );
