@@ -6,7 +6,7 @@ DefogDaily is not "generic AI dark mode." Every visual choice should map to one 
 ## Color Tokens
 - **Background**
   - `bg.base`: `#0B0E14` (primary canvas; deep, cool, not pure black)
-  - `bg.elevated`: `#121827` (raised sections/panels)
+  - `bg.elevated`: `#121827` (raised sections/panels) 
   - `bg.card`: `#182033` (glass-card backing)
 - **Accent**
   - `accent.cyan`: `#3ED9D5` (clarity/active signal)
