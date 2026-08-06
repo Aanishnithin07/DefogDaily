@@ -45,12 +45,7 @@ Generated from your own results, not a template. Targets your weakest domain, pr
 establish → load → stress → consolidate, pairs every drill with a real-world transfer habit, and
 re-scans you every seventh day so you can see whether it worked.
 
-## Running it
 
-```bash
-npm install
-npm run dev
-```
 
 ### Optional: cloud sync and the AI coach
 
