@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRandom } from "../lib/random";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
+import { cue } from "../lib/feedback";
 
 const TEST_DURATION_MS = 30_000;
 const INPUT_LOCK_MS = 300; 
@@ -102,7 +103,15 @@ export default function StroopTestGame({ onComplete }) {
       colorObj = randomElement(otherColors);
     }
     
-    setCurrentWord({ text: wordObj.label, colorId: colorObj.id, hex: colorObj.hex });
+    setCurrentWord({
+      text: wordObj.label,
+      colorId: colorObj.id,
+      hex: colorObj.hex,
+      // Recorded per trial so the report can compute interference cost —
+      // the gap between congruent and incongruent trials is the whole point
+      // of the Stroop task, and it is invisible without this flag.
+      congruent: isCongruent,
+    });
   }, []);
 
   useEffect(() => {
@@ -165,6 +174,7 @@ export default function StroopTestGame({ onComplete }) {
       attemptsRef.current.push({
         word: currentWord.text,
         colorId: currentWord.colorId,
+        congruent: currentWord.congruent,
         choice: colorId,
         correct: isCorrect,
         reactionMs,
@@ -172,6 +182,8 @@ export default function StroopTestGame({ onComplete }) {
         respondedAt: now,
         elapsedMs,
       });
+
+      cue(isCorrect ? "correct" : "wrong");
 
       const nextAttempts = statRef.current.totalAttempts + 1;
       const nextCorrect = isCorrect

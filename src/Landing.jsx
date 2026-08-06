@@ -1,312 +1,423 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
+import { motion, useMotionTemplate, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import {
-  motion,
-  useMotionTemplate,
-  useMotionValue,
-  useScroll,
-  useSpring,
-  useTransform,
-  useReducedMotion,
-} from "framer-motion";
-import { Brain, ShieldCheck, Sparkles } from "lucide-react";
-import {
-  blobFloat,
-  defogReveal,
-  fadeInUp,
-  springHover,
-  springTap,
-  staggerContainer,
-  useReducedMotionVariant,
-} from "./lib/motion";
+  ArrowRight,
+  BadgeCheck,
+  Check,
+  ChevronRight,
+  Flame,
+  Gauge,
+  Github,
+  Heart,
+  Lock,
+  Microscope,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  X,
+} from "lucide-react";
+import { DEEP_SCAN, DOMAINS, PILLARS } from "./lib/domains";
+import { defogReveal, fadeInUp, staggerContainer, useReducedMotionVariant } from "./lib/motion";
 import { trackEvent } from "./lib/analytics";
+import { levelForXp, useStore } from "./lib/storage";
+import { Button, Card, Pill, SectionTitle, accentOf } from "./components/ui";
+import { iconFor } from "./components/ui/icons";
 
-const VALUE_PROPS_ID = "value-props";
+/** The comparison that explains why this exists. */
+const COMPARISON = [
+  { feature: "Cognitive assessment across 8 domains", them: "Free trial, then paywalled", us: true },
+  { feature: "Percentile scoring against norms", them: "Premium only", us: true },
+  { feature: "Trial-level diagnostics (consistency, lapses, interference)", them: "Rarely offered at all", us: true },
+  { feature: "Personalised weakness diagnosis", them: "Premium only", us: true },
+  { feature: "28-day training protocol", them: "Subscription", us: true },
+  { feature: "Unlimited targeted practice", them: "Daily limit on free tier", us: true },
+  { feature: "Full progress history and export", them: "Locked or account-gated", us: true },
+  { feature: "No account required", them: "Signup wall", us: true },
+  { feature: "Your data sold or shared", them: "Often", us: false, invert: true },
+];
 
-const useIsMobile = (breakpoint = 768) => {
-  const [isMobile, setIsMobile] = useState(false);
+function DomainTile({ domainKey, variants }) {
+  const domain = DOMAINS[domainKey];
+  const Icon = iconFor(domain.icon);
+  const a = accentOf(domain.accent);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const media = window.matchMedia(`(max-width: ${breakpoint}px)`);
-    const update = () => setIsMobile(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, [breakpoint]);
+  return (
+    <motion.article
+      variants={variants}
+      whileHover={{ y: -3 }}
+      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      className="glass p-5"
+    >
+      <div className={`mb-3 grid h-10 w-10 place-items-center rounded-2xl-soft border ${a.border} ${a.soft}`}>
+        <Icon className={`h-4.5 w-4.5 ${a.text}`} aria-hidden="true" />
+      </div>
+      <h3 className="font-display text-sm text-text-primary">{domain.label}</h3>
+      <p className="mt-0.5 text-2xs uppercase tracking-wider text-text-tertiary">
+        {PILLARS[domain.pillar].label}
+      </p>
+      <p className="mt-2.5 text-xs leading-relaxed text-text-secondary">{domain.measures}</p>
+    </motion.article>
+  );
+}
 
-  return isMobile;
-};
-
-const GamePreviewMock = () => (
-  <div className="relative h-64 w-full overflow-hidden rounded-3xl-soft border border-white/10 bg-bg-card/50 p-5 backdrop-blur-xl md:h-80">
-    <div className="mb-4 font-display text-sm tracking-[0.2em] text-text-secondary">
-      PREVIEW
-    </div>
-    <div className="space-y-3">
-      {["17", "42", "88", "13", "96"].map((n, idx) => (
-        <div
-          key={n}
-          className={`flex h-10 items-center justify-between rounded-2xl-soft border border-white/10 px-4 ${
-            idx % 2 === 0 ? "bg-accent-cyan/10" : "bg-bg-elevated/70"
-          }`}
-        >
-          <span className="font-mono text-lg text-text-primary">{n}</span>
-          <span className="text-xs text-text-secondary">ODD / EVEN</span>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-const ValuePropCard = ({ icon: Icon, title, body, className = "", variants }) => (
-  <motion.article
-    variants={variants}
-    whileHover={{ y: -4, transition: { duration: 0.18, ease: "easeOut" } }}
-    className={`rounded-3xl-soft border border-white/10 bg-white/5 p-6 backdrop-blur-xl transition-shadow hover:shadow-glow-violet ${className}`}
-  >
-    <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl-soft bg-bg-elevated shadow-glow-cyan">
-      <Icon className="h-5 w-5 text-accent-cyan" aria-hidden="true" />
-    </div>
-    <h3 className="mb-2 font-display text-xl text-text-primary">{title}</h3>
-    <p className="font-body text-sm leading-relaxed text-text-secondary">{body}</p>
-  </motion.article>
-);
-
-export default function Landing({ onStartScan }) {
+export default function Landing({ onStartScan, onNavigate }) {
   const prefersReducedMotion = useReducedMotion();
-  const isMobile = useIsMobile();
-  const allowSpatialMotion = !prefersReducedMotion && !isMobile;
-  const heroRef = useRef(null);
-
+  const state = useStore();
   const { scrollY } = useScroll();
-  const navProgress = useTransform(scrollY, [0, 80], [0, 1], { clamp: true });
-  const navBgOpacity = useTransform(navProgress, [0, 1], [0, 0.78]);
-  const navBorderOpacity = useTransform(navProgress, [0, 1], [0, 0.15]);
-  const navBlur = useTransform(navProgress, [0, 1], [0, 20]);
 
-  const navBackground = useMotionTemplate`rgba(11, 14, 20, ${navBgOpacity})`;
-  const navBorder = useMotionTemplate`rgba(245, 248, 255, ${navBorderOpacity})`;
-  const navBackdrop = useMotionTemplate`blur(${navBlur}px)`;
+  const navOpacity = useTransform(scrollY, [0, 90], [0, 0.82], { clamp: true });
+  const navBorder = useTransform(scrollY, [0, 90], [0, 0.1], { clamp: true });
+  const navBg = useMotionTemplate`rgba(11, 14, 20, ${navOpacity})`;
+  const navBorderColor = useMotionTemplate`rgba(245, 248, 255, ${navBorder})`;
 
-  const fogYNear = useTransform(scrollY, [0, 800], [0, -90]);
-  const fogYFar = useTransform(scrollY, [0, 800], [0, -40]);
+  const hero = useReducedMotionVariant(prefersReducedMotion, defogReveal);
+  const up = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
+  const stagger = useMemo(() => staggerContainer(0.08, 0.14), []);
 
-  const magnetX = useMotionValue(0);
-  const magnetY = useMotionValue(0);
-  const springX = useSpring(magnetX, springHover);
-  const springY = useSpring(magnetY, springHover);
+  const hasHistory = state.sessions.length > 0;
+  const level = levelForXp(state.xp.total);
 
-  const heroHeadlineVariant = useReducedMotionVariant(prefersReducedMotion, defogReveal);
-  const staggerHero = useMemo(() => staggerContainer(0.08, 0.16), []);
-  const revealUp = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
-
-  const onPrimaryMouseMove = (event) => {
-    if (!allowSpatialMotion) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const localX = (event.clientX - rect.left) / rect.width - 0.5;
-    const localY = (event.clientY - rect.top) / rect.height - 0.5;
-    magnetX.set(localX * 10);
-    magnetY.set(localY * 8);
-  };
-
-  const onPrimaryMouseLeave = () => {
-    magnetX.set(0);
-    magnetY.set(0);
-  };
-
-  const scrollToValueProps = () => {
-    const target = document.getElementById(VALUE_PROPS_ID);
-    if (!target) return;
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  const start = (mode) => {
+    trackEvent("cta_clicked", { mode });
+    onStartScan(mode);
   };
 
   return (
-    <div className="min-h-screen bg-bg-base font-body text-text-primary">
-      <svg className="absolute h-0 w-0">
-        <filter id="defog-noise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="8">
-            {!prefersReducedMotion && (
-              <animate
-                attributeName="baseFrequency"
-                dur="10s"
-                values="0.85;0.95;0.85"
-                repeatCount="indefinite"
-              />
-            )}
-          </feTurbulence>
-        </filter>
-      </svg>
-
+    <div className="min-h-screen font-body text-text-primary">
       <motion.nav
-        style={{
-          backgroundColor: navBackground,
-          borderBottomColor: navBorder,
-          backdropFilter: navBackdrop,
-        }}
-        className="sticky top-0 z-40 border-b border-transparent"
+        style={{ backgroundColor: navBg, borderBottomColor: navBorderColor }}
+        className="sticky top-0 z-40 border-b border-transparent backdrop-blur-xl"
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3 md:px-8">
-          <span className="font-display text-lg tracking-wide text-text-primary">DefogDaily</span>
-          <button
-            type="button"
-            onClick={() => {
-              trackEvent("cta_clicked", { location: "hero", mode: "daily" });
-              onStartScan("daily");
-            }}
-            className="min-h-11 rounded-2xl-soft border border-white/10 px-4 text-sm text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
-          >
-            Start Scan
-          </button>
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 md:px-6">
+          <span className="font-display text-base tracking-wide text-text-primary">
+            Defog<span className="text-accent-cyan">Daily</span>
+          </span>
+          <div className="flex items-center gap-2">
+            {hasHistory && (
+              <button
+                type="button"
+                onClick={() => onNavigate("progress")}
+                className="hidden items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-2xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none sm:flex"
+              >
+                <Flame className="h-3 w-3 text-accent-amber" />
+                {state.streak.current} day · Lv {level.level}
+              </button>
+            )}
+            <Button variant="primary" size="sm" onClick={() => start("daily")}>
+              Start free
+            </Button>
+          </div>
         </div>
       </motion.nav>
 
       <main>
-        <section
-          ref={heroRef}
-          className="relative isolate overflow-hidden px-5 pb-16 pt-12 md:px-8 md:pb-24 md:pt-16"
-        >
-          <motion.div
-            aria-hidden="true"
-            variants={allowSpatialMotion ? blobFloat : undefined}
-            initial={allowSpatialMotion ? "initial" : false}
-            animate={allowSpatialMotion ? "animate" : false}
-            style={{ y: allowSpatialMotion ? fogYFar : 0 }}
-            className="pointer-events-none absolute -left-24 top-16 h-64 w-64 rounded-full bg-accent-cyan/20 blur-3xl"
-          />
-          <motion.div
-            aria-hidden="true"
-            variants={allowSpatialMotion ? blobFloat : undefined}
-            initial={allowSpatialMotion ? "initial" : false}
-            animate={allowSpatialMotion ? "animate" : false}
-            style={{ y: allowSpatialMotion ? fogYNear : 0 }}
-            className="pointer-events-none absolute right-[-4rem] top-20 h-80 w-80 rounded-full bg-accent-violet/20 blur-3xl"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-[0.07]"
-            style={{ filter: "url(#defog-noise)" }}
-          />
+        {/* Hero */}
+        <section className="relative px-4 pb-16 pt-12 md:px-6 md:pb-24 md:pt-20">
+          <div className="mx-auto max-w-5xl">
+            <motion.div variants={stagger} initial="hidden" animate="show" className="max-w-3xl">
+              <motion.div variants={up} className="mb-5 flex flex-wrap gap-2">
+                <Pill accent="emerald" icon={Heart}>
+                  Free forever
+                </Pill>
+                <Pill accent="cyan" icon={Lock}>
+                  No account needed
+                </Pill>
+                <Pill accent="violet" icon={Microscope}>
+                  Research-grade paradigms
+                </Pill>
+              </motion.div>
 
-          <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-2 md:items-center">
-            <motion.div
-              variants={staggerHero}
-              initial="hidden"
-              animate="show"
-              className="relative z-10"
-            >
               <motion.h1
-                variants={heroHeadlineVariant}
-                className="max-w-xl font-display text-4xl leading-tight text-text-primary sm:text-5xl md:text-6xl"
+                variants={hero}
+                className="font-display text-4xl leading-[1.08] text-text-primary sm:text-5xl md:text-6xl"
               >
-                Upgrade your{" "}
-                <motion.span
-                  variants={{
-                    hidden: heroHeadlineVariant.hidden,
-                    show: {
-                      ...heroHeadlineVariant.show,
-                      transition: {
-                        ...heroHeadlineVariant.show.transition,
-                        delay: prefersReducedMotion ? 0 : 0.22,
-                      },
-                    },
-                  }}
-                  animate={!prefersReducedMotion ? { backgroundPositionX: ["0%", "100%", "0%"] } : {}}
-                  transition={!prefersReducedMotion ? { duration: 6, ease: "easeInOut", repeat: Infinity } : {}}
-                  className="bg-gradient-to-r from-accent-cyan via-text-primary to-accent-violet bg-[length:220%_220%] bg-clip-text text-transparent"
-                >
-                  working memory.
-                </motion.span>
+                Find out exactly where
+                <br />
+                your mind is{" "}
+                <span className="text-gradient">weak</span>.
+                <br />
+                Then fix it.
               </motion.h1>
 
               <motion.p
-                variants={revealUp}
-                className="mt-5 max-w-lg text-base leading-relaxed text-text-secondary md:text-lg"
+                variants={up}
+                className="mt-6 max-w-xl text-base leading-relaxed text-text-secondary md:text-lg"
               >
-                A 3-minute cognitive calibration built for signal, not noise. Measure speed,
-                recall, and focus with game mechanics grounded in real paradigms.
+                Eight cognitive domains, measured trial by trial. You get a real diagnostic report —
+                percentiles, reaction-time consistency, interference cost, impulsivity — plus a
+                28-day protocol built from your own weakest result.
+                <span className="text-text-primary"> All of it free, for everyone.</span>
               </motion.p>
 
-              <motion.div variants={revealUp} className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <motion.button
-                  type="button"
-                  onClick={() => {
-                    trackEvent("cta_clicked", { location: "value_props", mode: "daily" });
-                    onStartScan("daily");
-                  }}
-                  onMouseMove={onPrimaryMouseMove}
-                  onMouseLeave={onPrimaryMouseLeave}
-                  whileTap={allowSpatialMotion ? { scale: 0.98 } : undefined}
-                  transition={springTap}
-                  style={{
-                    x: allowSpatialMotion ? springX : 0,
-                    y: allowSpatialMotion ? springY : 0,
-                  }}
-                  className="min-h-11 rounded-2xl-soft bg-accent-cyan px-6 py-3 font-medium text-bg-base shadow-glow-cyan transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
-                >
-                  Start Daily Challenge
-                </motion.button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    trackEvent("cta_clicked", { location: "value_props", mode: "practice" });
-                    onStartScan("practice");
-                  }}
-                  className="min-h-11 rounded-2xl-soft border border-white/15 px-6 py-3 text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet"
-                >
-                  Play Practice Mode
-                </button>
+              <motion.div variants={up} className="mt-9 flex flex-col gap-3 sm:flex-row">
+                <Button variant="primary" size="lg" magnetic icon={Play} onClick={() => start("daily")}>
+                  Start Daily Scan · 3 min
+                </Button>
+                <Button variant="secondary" size="lg" iconRight={ArrowRight} onClick={() => start("deep")}>
+                  Full Deep Scan · 8 min
+                </Button>
               </motion.div>
+
+              {hasHistory && (
+                <motion.button
+                  variants={up}
+                  type="button"
+                  onClick={() => onNavigate(state.plan ? "train" : "progress")}
+                  className="mt-6 flex items-center gap-2 text-sm text-accent-cyan transition-opacity hover:opacity-80 focus-visible:outline-none"
+                >
+                  {state.plan ? "Continue your 28-day protocol" : "See your progress"}
+                  <ChevronRight className="h-4 w-4" />
+                </motion.button>
+              )}
             </motion.div>
 
-            <motion.div variants={revealUp} initial="hidden" animate="show" className="relative z-10">
-              <GamePreviewMock />
+            {/* Stat strip */}
+            <motion.div
+              variants={up}
+              initial="hidden"
+              animate="show"
+              className="mt-14 grid grid-cols-2 gap-3 sm:grid-cols-4"
+            >
+              {[
+                { value: "8", label: "cognitive domains" },
+                { value: "40+", label: "metrics per scan" },
+                { value: "28", label: "day training protocol" },
+                { value: "£0", label: "forever" },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl-soft border border-white/[0.07] bg-white/[0.02] p-4 text-center"
+                >
+                  <div className="font-mono text-2xl text-text-primary md:text-3xl" data-tabular>
+                    {stat.value}
+                  </div>
+                  <div className="mt-1 text-2xs uppercase tracking-wider text-text-tertiary">
+                    {stat.label}
+                  </div>
+                </div>
+              ))}
             </motion.div>
           </div>
         </section>
 
-        <section id={VALUE_PROPS_ID} className="mx-auto max-w-6xl px-5 py-14 md:px-8 md:py-20">
-          <motion.div
-            variants={staggerContainer(0.1, 0.06)}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.25 }}
-            className="grid gap-4 md:grid-cols-3"
-          >
-            <ValuePropCard
-              variants={revealUp}
-              className="md:col-span-2"
-              icon={Sparkles}
-              title="AI-generated puzzles that never repeat"
-              body="Each run creates fresh odd/even, dual-recall, and spatial-load combinations so you measure cognition, not memorization."
+        {/* What we measure */}
+        <section className="px-4 py-16 md:px-6 md:py-20">
+          <div className="mx-auto max-w-5xl">
+            <SectionTitle
+              eyebrow="The battery"
+              title="Eight domains, not one vague score"
             />
-            <ValuePropCard
-              variants={revealUp}
-              icon={Brain}
-              title="3 minutes, high signal"
-              body="Fast enough for daily use, strict enough to reveal drift in attention and working-memory sharpness."
-            />
-            <ValuePropCard
-              variants={revealUp}
-              icon={ShieldCheck}
-              title="100% free, forever"
-              body="No signup wall, no paywalled metrics. Run it, share it, and compare over time."
-            />
-          </motion.div>
+            <p className="mb-7 max-w-2xl text-sm leading-relaxed text-text-secondary">
+              Each game is adapted from a paradigm that cognitive scientists actually use. Every
+              trial is timed to the millisecond, so the report can tell you not just what you scored
+              but which failure mode produced it.
+            </p>
+            <motion.div
+              variants={staggerContainer(0.06)}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.15 }}
+              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            >
+              {DEEP_SCAN.map((key) => (
+                <DomainTile key={key} domainKey={key} variants={up} />
+              ))}
+            </motion.div>
+          </div>
         </section>
 
-        <section className="border-y border-white/10 bg-bg-elevated/45 px-5 py-4 md:px-8">
-          <p className="mx-auto max-w-6xl text-center text-sm text-text-secondary">
-            Built on N-back and dual-task recall paradigms from cognitive psychology
-            research.
-          </p>
+        {/* The free promise */}
+        <section className="px-4 py-16 md:px-6 md:py-20">
+          <div className="mx-auto max-w-4xl">
+            <SectionTitle
+              eyebrow="Why this exists"
+              title="Everything other apps charge for"
+            />
+            <p className="mb-7 max-w-2xl text-sm leading-relaxed text-text-secondary">
+              Cognitive assessment is not expensive to run. It is expensive to buy, because the
+              category learned it could paywall a progress chart. This project exists to put the
+              whole thing — assessment, diagnosis, and training — in front of everyone at no cost.
+            </p>
+
+            <Card strong className="overflow-hidden p-0">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 border-b border-white/[0.08] px-4 py-3 text-2xs uppercase tracking-wider text-text-tertiary md:gap-x-6 md:px-6">
+                <span>Feature</span>
+                <span className="w-20 text-center md:w-32">Typical app</span>
+                <span className="w-16 text-center md:w-24">DefogDaily</span>
+              </div>
+              {COMPARISON.map((row) => (
+                <div
+                  key={row.feature}
+                  className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 border-b border-white/[0.05] px-4 py-3.5 last:border-0 md:gap-x-6 md:px-6"
+                >
+                  <span className="text-sm leading-snug text-text-primary">{row.feature}</span>
+                  <span className="w-20 text-center text-2xs leading-snug text-text-tertiary md:w-32">
+                    {row.them}
+                  </span>
+                  <span className="grid w-16 place-items-center md:w-24">
+                    {row.invert ? (
+                      <span className="flex items-center gap-1 text-2xs text-success">
+                        <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                        Never
+                      </span>
+                    ) : (
+                      <Check className="h-4 w-4 text-success" strokeWidth={2.5} />
+                    )}
+                  </span>
+                </div>
+              ))}
+            </Card>
+
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Button variant="primary" size="md" magnetic onClick={() => start("daily")}>
+                Try it now — no signup
+              </Button>
+              <span className="text-xs text-text-tertiary">
+                Runs entirely in your browser. Your results stay on your device.
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section className="px-4 py-16 md:px-6 md:py-20">
+          <div className="mx-auto max-w-5xl">
+            <SectionTitle eyebrow="The loop" title="Measure, diagnose, train, re-measure" />
+            <motion.div
+              variants={staggerContainer(0.1)}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.2 }}
+              className="grid gap-4 md:grid-cols-3"
+            >
+              {[
+                {
+                  icon: Gauge,
+                  step: "01",
+                  title: "Scan",
+                  body: "Three minutes for the core four, eight for the full battery. Every keystroke is timestamped, so we measure the shape of your performance, not just the total.",
+                },
+                {
+                  icon: Microscope,
+                  step: "02",
+                  title: "Diagnose",
+                  body: "The report names the specific failure mode — flickering attention, a slow brake, expensive switching, weak encoding — and cites the number that proves it.",
+                },
+                {
+                  icon: Target,
+                  step: "03",
+                  title: "Train",
+                  body: "A 28-day protocol targets your weakest domain with progressive drills and daily real-world habits, then re-scans you every seventh day.",
+                },
+              ].map(({ icon: Icon, step, title, body }) => (
+                <motion.div key={step} variants={up}>
+                  <Card className="h-full p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="grid h-10 w-10 place-items-center rounded-2xl-soft border border-accent-cyan/25 bg-accent-cyan/[0.07]">
+                        <Icon className="h-4.5 w-4.5 text-accent-cyan" aria-hidden="true" />
+                      </div>
+                      <span className="font-mono text-xs text-text-tertiary">{step}</span>
+                    </div>
+                    <h3 className="font-display text-lg text-text-primary">{title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-text-secondary">{body}</p>
+                  </Card>
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Science */}
+        <section className="px-4 py-16 md:px-6 md:py-20">
+          <div className="mx-auto max-w-4xl">
+            <Card className="p-6 md:p-8">
+              <div className="flex items-center gap-2">
+                <BadgeCheck className="h-4 w-4 text-accent-violet" aria-hidden="true" />
+                <span className="eyebrow">Honest about the science</span>
+              </div>
+              <h2 className="mt-3 font-display text-2xl text-text-primary">
+                What this is, and what it is not
+              </h2>
+              <div className="mt-4 grid gap-5 md:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm text-success">
+                    <Check className="h-3.5 w-3.5" /> What it does
+                  </h3>
+                  <ul className="space-y-2 text-sm leading-relaxed text-text-secondary">
+                    <li>Measures real cognitive paradigms — Stroop, N-back, Go/No-Go, Corsi, digit span, task switching.</li>
+                    <li>Tracks you against yourself over time, which is where the signal actually is.</li>
+                    <li>Separates failure modes that look identical in a single score.</li>
+                    <li>Trains at the difficulty where adaptation happens, not where it feels good.</li>
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm text-warning">
+                    <X className="h-3.5 w-3.5" /> What it is not
+                  </h3>
+                  <ul className="space-y-2 text-sm leading-relaxed text-text-secondary">
+                    <li>Not a medical or clinical assessment, and not a diagnosis of anything.</li>
+                    <li>Not validated against a clinical sample — percentiles come from a model-based reference distribution.</li>
+                    <li>Not a claim that training one domain raises general intelligence. Transfer is narrow and contested.</li>
+                    <li>Not a substitute for sleep, exercise, or talking to a doctor if something feels wrong.</li>
+                  </ul>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="px-4 pb-20 md:px-6">
+          <div className="mx-auto max-w-4xl">
+            <Card strong glow="cyan" className="p-8 text-center md:p-12">
+              <Sparkles className="mx-auto h-6 w-6 text-accent-cyan" aria-hidden="true" />
+              <h2 className="mt-4 font-display text-3xl leading-tight text-text-primary md:text-4xl">
+                Three minutes to find out
+              </h2>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-text-secondary">
+                No email, no card, no trial that expires. Start the scan and you will have a full
+                report before your coffee goes cold.
+              </p>
+              <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+                <Button variant="primary" size="lg" magnetic icon={Play} onClick={() => start("daily")}>
+                  Start Daily Scan
+                </Button>
+                <Button variant="secondary" size="lg" onClick={() => start("practice")}>
+                  Free practice mode
+                </Button>
+              </div>
+            </Card>
+          </div>
         </section>
       </main>
 
-      <footer className="mx-auto flex max-w-6xl flex-col items-center gap-1 px-5 py-8 md:px-8">
-        <div className="font-display text-lg text-text-primary">DefogDaily</div>
-        <p className="text-sm text-text-secondary">
-          Clear the fog. Measure what your mind can do today.
-        </p>
+      <footer className="border-t border-white/[0.06] px-4 py-10 md:px-6">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 text-center">
+          <div className="font-display text-lg text-text-primary">
+            Defog<span className="text-accent-cyan">Daily</span>
+          </div>
+          <p className="max-w-md text-sm leading-relaxed text-text-secondary">
+            Clear the fog. Measure what your mind can do today, then do something about it.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-2xs text-text-tertiary">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="h-3 w-3" /> No tracking, no ads, no data sales
+            </span>
+            <a
+              href="https://github.com/Aanishnithin07/DefogDaily"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 transition-colors hover:text-text-secondary"
+            >
+              <Github className="h-3 w-3" /> Open source
+            </a>
+          </div>
+          <p className="mt-2 max-w-lg text-2xs leading-relaxed text-text-tertiary">
+            DefogDaily is an educational tool, not a medical device. It cannot diagnose any
+            condition. If you are worried about your memory or concentration, speak to a doctor.
+          </p>
+        </div>
       </footer>
     </div>
   );

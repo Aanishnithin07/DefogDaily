@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { fadeIn, fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
+import { cue } from "../lib/feedback";
 import { getRandom, shuffleArray } from "../lib/random";
 
 const MEMORIZE_DURATION_MS = 5_000;
@@ -61,7 +62,7 @@ const createRound = () => {
     category,
     targets,
     decoys,
-    recallWords: shuffle([...targets, ...decoys]),
+    recallWords: shuffleArray([...targets, ...decoys]),
   };
 };
 
@@ -128,6 +129,7 @@ export default function WorkingMemoryGame({ onComplete }) {
 
   const toggleWordSelection = (word) => {
     if (phase !== "recall") return;
+    cue("tap");
     setSelectedWords((current) => {
       if (current.includes(word)) {
         const next = current.filter((item) => item !== word);

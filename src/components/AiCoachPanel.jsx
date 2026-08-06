@@ -1,63 +1,79 @@
-import React, { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
-import { generateCoachInsight } from "../lib/ai";
-import { fadeInUp, useReducedMotionVariant } from "../lib/motion";
+import { generateCoachInsight, isAiConfigured } from "../lib/ai";
+import { Card } from "./ui";
 
-export default function AiCoachPanel({ scores }) {
+/**
+ * The coach briefing. Uses Firebase AI Logic when configured, and a locally
+ * composed briefing built from the same report when it is not — so the panel
+ * always says something useful, key or no key.
+ */
+export default function AiCoachPanel({ report }) {
   const [insight, setInsight] = useState("");
   const [loading, setLoading] = useState(true);
-  const prefersReducedMotion = useReducedMotion();
-  const upVariant = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
 
   useEffect(() => {
-    let isMounted = true;
+    let alive = true;
     setLoading(true);
 
-    generateCoachInsight(scores).then((res) => {
-      if (isMounted) {
-        setInsight(res);
-        setLoading(false);
-      }
+    generateCoachInsight(report).then((text) => {
+      if (!alive) return;
+      setInsight(text);
+      setLoading(false);
     });
 
     return () => {
-      isMounted = false;
+      alive = false;
     };
-  }, [scores]);
+  }, [report]);
+
+  const paragraphs = insight.split("\n").filter(Boolean);
 
   return (
-    <motion.div
-      variants={upVariant}
-      className="mt-10 w-full max-w-2xl overflow-hidden rounded-3xl-soft border border-white/10 bg-bg-elevated p-[1px] relative shadow-glow-cyan"
-    >
-      {/* Animated gradient border effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-accent-cyan/20 via-accent-violet/20 to-accent-cyan/20 animate-pulse opacity-50" />
-      
-      <div className="relative flex w-full flex-col items-start gap-4 rounded-[1.5rem] bg-bg-card p-6 backdrop-blur-xl md:flex-row md:items-center">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-bg-elevated shadow-glow-violet">
-          <Sparkles className="h-6 w-6 text-accent-violet" />
+    <Card strong className="relative overflow-hidden p-6">
+      {/* Slow sheen along the top edge marks this as the generated panel. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px animate-sheen-sweep bg-[linear-gradient(90deg,transparent,rgba(62,217,213,0.8),transparent)] bg-[length:200%_100%]"
+      />
+
+      <div className="flex items-start gap-4">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl-soft border border-accent-violet/25 bg-accent-violet/10">
+          <Sparkles className="h-4.5 w-4.5 text-accent-violet" aria-hidden="true" />
         </div>
-        
-        <div className="flex-1">
-          <h3 className="mb-1 font-display font-medium text-text-primary">Defog AI Coach</h3>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display text-base text-text-primary">Defog Coach</h3>
+            <span className="text-2xs uppercase tracking-wider text-text-tertiary">
+              {isAiConfigured() ? "AI briefing" : "Rule-based briefing"}
+            </span>
+          </div>
+
           {loading ? (
-            <div className="flex flex-col gap-2">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-white/10" />
-              <div className="h-4 w-1/2 animate-pulse rounded bg-white/10" />
-              <p className="mt-1 text-xs text-text-secondary">Synthesizing cognitive baseline...</p>
+            <div className="mt-3 space-y-2">
+              <div className="skeleton h-3.5 w-full" />
+              <div className="skeleton h-3.5 w-11/12" />
+              <div className="skeleton h-3.5 w-4/6" />
+              <p className="pt-1 text-2xs text-text-tertiary">Reading your trial data…</p>
             </div>
           ) : (
-            <motion.p
-              initial={{ opacity: 0, y: 5 }}
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-sm leading-relaxed text-text-secondary"
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-2.5 space-y-2.5"
             >
-              {insight}
-            </motion.p>
+              {paragraphs.map((paragraph, i) => (
+                <p key={i} className="text-sm leading-relaxed text-text-secondary">
+                  {paragraph}
+                </p>
+              ))}
+            </motion.div>
           )}
         </div>
       </div>
-    </motion.div>
+    </Card>
   );
 }

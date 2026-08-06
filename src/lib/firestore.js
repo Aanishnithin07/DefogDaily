@@ -1,35 +1,40 @@
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "firebase/firestore";
-import { db, isConfigured } from "./firebase";
+import { getDb, isConfigured } from "./firebase";
 
-export const saveScore = async (userId, rawScores, normalizedScores) => {
-  if (!isConfigured || !db) return;
+/**
+ * Optional cloud backup of scan results. Every function no-ops cleanly when
+ * Firebase is not configured, so the local-first path never has to branch.
+ */
+
+export const saveScore = async (userId, metrics, normalizedScores) => {
+  if (!isConfigured || !userId) return;
+  const client = await getDb();
+  if (!client) return;
   try {
-    const userScansRef = collection(db, "users", userId, "scans");
-    await addDoc(userScansRef, {
-      rawScores,
+    const { collection, addDoc, serverTimestamp } = client.mod;
+    await addDoc(collection(client.db, "users", userId, "scans"), {
+      metrics,
       normalizedScores,
-      timestamp: serverTimestamp()
+      timestamp: serverTimestamp(),
     });
-  } catch (err) {
-    console.error("Error saving score:", err);
+  } catch (error) {
+    console.error("Error saving score:", error);
   }
 };
 
 export const fetchUserHistory = async (userId) => {
-  if (!isConfigured || !db) return [];
+  if (!isConfigured || !userId) return [];
+  const client = await getDb();
+  if (!client) return [];
   try {
-    const q = query(
-      collection(db, "users", userId, "scans"),
-      orderBy("timestamp", "asc")
+    const { collection, getDocs, orderBy, query } = client.mod;
+    const snapshot = await getDocs(
+      query(collection(client.db, "users", userId, "scans"), orderBy("timestamp", "asc"))
     );
-    const querySnapshot = await getDocs(q);
     const history = [];
-    querySnapshot.forEach((doc) => {
-      history.push({ id: doc.id, ...doc.data() });
-    });
+    snapshot.forEach((doc) => history.push({ id: doc.id, ...doc.data() }));
     return history;
-  } catch (err) {
-    console.error("Error fetching history:", err);
+  } catch (error) {
+    console.error("Error fetching history:", error);
     return [];
   }
 };

@@ -1,133 +1,116 @@
-import { useEffect, useMemo, useState, lazy, Suspense, useRef } from "react";
-import { animate, motion, useMotionValue, useReducedMotion, AnimatePresence } from "framer-motion";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import * as htmlToImage from "html-to-image";
-import { Share2, Zap, Brain, Grid3X3, Copy, Focus } from "lucide-react";
 import confetti from "canvas-confetti";
+import {
+  ArrowRight,
+  Award,
+  FileText,
+  Flame,
+  Home,
+  RotateCcw,
+  Share2,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import { trackEvent } from "../lib/analytics";
-import { normalizeScores } from "../lib/scoring";
 import { defogReveal, fadeInUp, staggerContainer, useReducedMotionVariant } from "../lib/motion";
-import { useAuth } from "../context/AuthContext";
-import { saveScore } from "../lib/firestore";
-import AiCoachPanel from "./AiCoachPanel";
-import { getRelativeWeakness, useSkillProfile } from "../lib/skillProfile";
+import { ordinal } from "../lib/norms";
+import { ACHIEVEMENT_MAP } from "../lib/achievements";
+import { cue } from "../lib/feedback";
+import { Button, Card, CountUp, Meter, Pill, ScoreRing, accentOf, useToast } from "./ui";
+import { iconFor } from "./ui/icons";
 
-const RadarChart = lazy(() =>
-  import("recharts").then((mod) => ({ default: mod.RadarChart }))
-);
-const PolarGrid = lazy(() =>
-  import("recharts").then((mod) => ({ default: mod.PolarGrid }))
-);
-const PolarAngleAxis = lazy(() =>
-  import("recharts").then((mod) => ({ default: mod.PolarAngleAxis }))
-);
-const Radar = lazy(() => import("recharts").then((mod) => ({ default: mod.Radar })));
-const ResponsiveContainer = lazy(() =>
-  import("recharts").then((mod) => ({ default: mod.ResponsiveContainer }))
-);
+const DomainRadar = lazy(() => import("./charts/DomainRadar"));
 
-const ChartPlaceholder = () => (
-  <div className="h-64 w-full animate-pulse rounded-full bg-white/5 md:h-80" />
-);
-
-const DomainCard = ({ title, score, icon: Icon, tier, variants }) => (
-  <motion.div
-    variants={variants}
-    className="flex flex-col items-center rounded-3xl-soft border border-white/10 bg-bg-card/70 p-5 backdrop-blur-xl transition hover:shadow-glow-cyan"
-  >
-    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl-soft bg-bg-elevated shadow-glow-cyan">
-      <Icon className="h-5 w-5 text-accent-cyan" aria-hidden="true" />
-    </div>
-    <span className="font-display text-sm text-text-secondary">{title}</span>
-    <span className="mt-1 font-mono text-3xl text-text-primary">{score}</span>
-    <span className="mt-1 text-xs text-text-secondary">{tier}</span>
-  </motion.div>
-);
-
-export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) {
+/**
+ * The reveal. This screen has one job: land the number, then hand you straight
+ * to the report that explains it. Everything diagnostic lives in ReportScreen —
+ * this is the moment, not the analysis.
+ */
+export default function ResultsDashboard({
+  report,
+  result,
+  sessionMeta,
+  onViewReport,
+  onStartPlan,
+  onRescan,
+  onHome,
+}) {
   const prefersReducedMotion = useReducedMotion();
-  const scores = useMemo(() => normalizeScores(rawScores), [rawScores]);
-  const [toast, setToast] = useState("");
+  const toast = useToast();
   const snapshotRef = useRef(null);
-  const { currentUser, signInWithGoogle, isConfigured } = useAuth();
-  const [hasSaved, setHasSaved] = useState(false);
-  const profile = useSkillProfile();
-  const weakness = profile ? getRelativeWeakness(profile) : null;
-
-  useEffect(() => {
-    if (currentUser && !hasSaved) {
-      saveScore(currentUser.uid, rawScores, scores);
-      setHasSaved(true);
-    }
-  }, [currentUser, hasSaved, rawScores, scores]);
-
-  // Big score counter
-  const scoreValue = useMotionValue(0);
-  const [displayScore, setDisplayScore] = useState(0);
-
-  useEffect(() => {
-    const controls = animate(scoreValue, scores.aggregate, {
-      duration: prefersReducedMotion ? 0 : 2,
-      ease: "easeOut",
-      onUpdate: (latest) => setDisplayScore(Math.round(latest)),
-    });
-    return () => controls.stop();
-  }, [scores.aggregate, scoreValue, prefersReducedMotion]);
+  const firedRef = useRef(false);
 
   const defog = useReducedMotionVariant(prefersReducedMotion, defogReveal);
   const up = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
-  const stagger = useMemo(() => staggerContainer(0.15, 0.4), []);
+  const stagger = useMemo(() => staggerContainer(0.12, 0.35), []);
 
-  const getTier = (score) => {
-    // MOCK percentiles/tiers, pending real population data
-    if (score >= 90) return "Top 10%";
-    if (score >= 70) return "Above Avg";
-    if (score >= 50) return "Average";
-    return "Below Avg";
-  };
+  const scores = report?.scores ?? {};
+  const composite = report?.index?.index ?? result?.scores?.aggregate ?? 0;
+  const percentile = report?.index?.percentile ?? 50;
 
-  const chartData = [
-    { subject: "Speed", A: scores.speed, fullMark: 100 },
-    { subject: "Memory", A: scores.memory, fullMark: 100 },
-    { subject: "Stroop", A: scores.stroop, fullMark: 100 },
-    { subject: "Spatial", A: scores.spatial, fullMark: 100 },
-  ];
+  const radarData = useMemo(
+    () => (report?.domains ?? []).map((d) => ({ label: d.short, value: d.score })),
+    [report]
+  );
+
+  const newAchievements = sessionMeta?.newAchievements ?? [];
+
+  // Celebrate once, scaled to how well the run actually went.
+  useEffect(() => {
+    if (firedRef.current || prefersReducedMotion) return;
+    firedRef.current = true;
+    const delay = window.setTimeout(() => {
+      cue("reveal");
+      confetti({
+        particleCount: percentile > 80 ? 130 : 70,
+        spread: percentile > 80 ? 92 : 62,
+        origin: { y: 0.42 },
+        colors: ["#3ED9D5", "#8A7BFF", "#F5F8FF", "#3DDC97"],
+        disableForReducedMotion: true,
+      });
+    }, 900);
+    return () => window.clearTimeout(delay);
+  }, [percentile, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (newAchievements.length > 0) {
+      const id = window.setTimeout(() => cue("achievement"), 1800);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [newAchievements.length]);
 
   const handleShare = async () => {
     trackEvent("share_clicked");
-    const text = `DefogDaily Baseline 🧠 | Overall: ${scores.aggregate}\n⚡️ Speed: ${scores.speed} | 🧩 Memory: ${scores.memory} | 🎯 Stroop: ${scores.stroop} | 🗺️ Spatial: ${scores.spatial}\nClear your fog at defogdaily.com`;
-
-    confetti({
-      particleCount: 80,
-      spread: 60,
-      origin: { y: 0.6 },
-      colors: ["#3ED9D5", "#8A7BFF", "#F5F8FF"],
-      disableForReducedMotion: true,
-    });
+    const domainText = (report?.domains ?? [])
+      .slice(0, 4)
+      .map((d) => `${d.short} ${d.score}`)
+      .join(" · ");
+    const text = `DefogDaily · Cognitive Index ${composite} (${ordinal(percentile)} percentile)\n${domainText}\nFree cognitive testing and training at defogdaily.com`;
 
     let dataUrl = null;
     let file = null;
-
     try {
       if (snapshotRef.current) {
-        dataUrl = await htmlToImage.toPng(snapshotRef.current, { backgroundColor: '#0B0E14', pixelRatio: 2 });
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        file = new File([blob], "defog-daily-score.png", { type: "image/png" });
+        dataUrl = await htmlToImage.toPng(snapshotRef.current, {
+          backgroundColor: "#0B0E14",
+          pixelRatio: 2,
+        });
+        const blob = await (await fetch(dataUrl)).blob();
+        file = new File([blob], "defogdaily-scan.png", { type: "image/png" });
       }
-    } catch (e) {
-      console.error("Failed to generate image snapshot", e);
+    } catch (error) {
+      console.error("Snapshot failed", error);
     }
 
-    if (navigator.share && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (navigator.share && file && navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({
-          title: "My DefogDaily Scan",
-          text: text,
-          files: [file]
-        });
+        await navigator.share({ title: "My DefogDaily scan", text, files: [file] });
         return;
-      } catch (e) {
-        // Fallback to clipboard if user cancels or it fails
+      } catch {
+        // User cancelled — fall through to clipboard.
       }
     }
 
@@ -135,16 +118,15 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
       await navigator.clipboard.writeText(text);
       if (dataUrl) {
         const link = document.createElement("a");
-        link.download = "defog-daily-score.png";
+        link.download = "defogdaily-scan.png";
         link.href = dataUrl;
         link.click();
-        setToast("Score Image Downloaded & Text Copied!");
+        toast.show("Image saved and stats copied");
       } else {
-        setToast("Copied to clipboard!");
+        toast.show("Stats copied to clipboard");
       }
-      setTimeout(() => setToast(""), 3000);
-    } catch (err) {
-      console.error("Failed to copy", err);
+    } catch {
+      toast.show("Could not copy — try the screenshot instead");
     }
   };
 
@@ -153,190 +135,173 @@ export default function ResultsDashboard({ rawScores, onReset, onViewHistory }) 
       variants={stagger}
       initial="hidden"
       animate="show"
-      className="mx-auto flex w-full max-w-4xl flex-col items-center pb-12"
+      className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:px-6 md:pb-16"
     >
-      <div ref={snapshotRef} className="flex w-full flex-col items-center pb-8 pt-4">
-      {/* SVG filter for the radar neon glow */}
-      <svg width="0" height="0">
-        <filter id="neon-glow">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-          <feMerge>
-            <feMergeNode in="coloredBlur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </svg>
+      {/* Snapshot region — what gets captured for sharing. */}
+      <div ref={snapshotRef} className="rounded-3xl-soft bg-bg-base/40 px-1 py-6">
+        <div className="flex flex-col items-center text-center">
+          <motion.p variants={up} className="eyebrow mb-4">
+            {sessionMeta?.modeLabel ?? "Scan complete"}
+          </motion.p>
 
-      <div className="text-center">
-        <motion.h2 variants={up} className="font-display text-2xl text-text-secondary">
-          Memory Wellness Score
-        </motion.h2>
-        <motion.div
-          variants={defog}
-          className="mt-2 font-mono text-8xl md:text-9xl bg-gradient-to-r from-accent-cyan to-accent-violet bg-clip-text text-transparent"
-        >
-          {displayScore}
-        </motion.div>
-      </div>
-
-      <motion.div variants={up} className="mt-10 h-64 w-full md:h-80">
-        <Suspense fallback={<ChartPlaceholder />}>
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
-              <PolarGrid stroke="rgba(255,255,255,0.1)" />
-              <PolarAngleAxis
-                dataKey="subject"
-                tick={{ fill: "#9AA7C2", fontSize: 12, fontFamily: "Inter" }}
-              />
-              <Radar
-                name="Score"
-                dataKey="A"
-                stroke="#3ED9D5"
-                strokeWidth={3}
-                fill="#3ED9D5"
-                fillOpacity={0.2}
-                style={{ filter: "url(#neon-glow)" }}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
-        </Suspense>
-      </motion.div>
-
-      <div className="mt-10 grid w-full grid-cols-2 gap-3 md:grid-cols-4 md:gap-6">
-        <DomainCard
-          title="Speed"
-          score={scores.speed}
-          icon={Zap}
-          tier={getTier(scores.speed)}
-          variants={up}
-        />
-        <DomainCard
-          title="Memory"
-          score={scores.memory}
-          icon={Brain}
-          tier={getTier(scores.memory)}
-          variants={up}
-        />
-        <DomainCard
-          title="Stroop"
-          score={scores.stroop}
-          icon={Focus}
-          tier={getTier(scores.stroop)}
-          variants={up}
-        />
-        <DomainCard
-          title="Spatial"
-          score={scores.spatial}
-          icon={Grid3X3}
-          tier={getTier(scores.spatial)}
-          variants={up}
-        />
-      </div>
-
-      </div>
-
-      {weakness ? (
-        <motion.div variants={up} className="mt-12 w-full">
-          <div className="rounded-3xl-soft border border-accent-violet/30 bg-accent-violet/5 p-6 backdrop-blur-xl">
-            <h3 className="font-display text-xl text-text-primary">
-              Focus Area: <span className="text-accent-violet">{weakness.label}</span>
-            </h3>
-            <p className="mt-2 text-sm text-text-secondary leading-relaxed">
-              {weakness.name === "speed" && "Try setting a 2-minute timer for a routine task today (like reading an email or organizing a folder). Force yourself to move deliberately faster than comfortable."}
-              {weakness.name === "memory" && "Next time you need to write down a short list (groceries, tasks), try holding it in your head for 10 minutes first before writing it down."}
-              {weakness.name === "spatial" && "When you walk into a new room today, close your eyes and try to point to 3 objects you just saw."}
-              {weakness.name === "stroop" && "When reading a news headline today, try to count the number of words instead of reading the meaning."}
-            </p>
-          </div>
-        </motion.div>
-      ) : profile && profile.speed.sessions === 1 ? (
-        <motion.div variants={up} className="mt-12 w-full">
-          <div className="rounded-3xl-soft border border-accent-cyan/30 bg-accent-cyan/5 p-6 backdrop-blur-xl">
-            <h3 className="font-display text-xl text-text-primary">
-              Baseline Established
-            </h3>
-            <p className="mt-2 text-sm text-text-secondary leading-relaxed">
-              This is your baseline. Come back tomorrow to see where you're improving!
-            </p>
-          </div>
-        </motion.div>
-      ) : null}
-
-      <div className="mt-8 w-full">
-        <AiCoachPanel scores={scores} />
-      </div>
-
-      <motion.div variants={up} className="mt-12 flex flex-col items-center gap-4">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={handleShare}
-            className="flex min-h-12 items-center gap-2 rounded-2xl-soft bg-accent-violet px-8 font-medium text-bg-base shadow-glow-violet transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet"
-          >
-            <Share2 className="h-5 w-5" />
-            Share My Brain Stats
-          </button>
-          
-          {/* Toast Notification */}
-          <AnimatePresence>
-            {toast && (
-              <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-bg-elevated px-4 py-2 text-sm text-text-primary shadow-lg border border-white/10"
-              >
-                <div className="flex items-center gap-2">
-                  <Copy className="h-4 w-4 text-accent-cyan" />
-                  {toast}
+          <motion.div variants={defog}>
+            <ScoreRing value={percentile} size={224} stroke={12} accent="cyan" label="Cognitive index">
+              <div className="text-center">
+                <div className="font-mono text-6xl leading-none text-gradient-cyan md:text-7xl">
+                  <CountUp value={composite} duration={prefersReducedMotion ? 0 : 1.9} />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <div className="mt-2 text-xs uppercase tracking-widest2 text-text-tertiary">
+                  Cognitive Index
+                </div>
+              </div>
+            </ScoreRing>
+          </motion.div>
+
+          <motion.p variants={up} className="mt-4 text-sm text-text-secondary">
+            {ordinal(percentile)} percentile
+            {report?.cognitiveAge ? ` · cognitive age ${report.cognitiveAge.years}` : ""}
+          </motion.p>
+
+          <motion.h1
+            variants={up}
+            className="mt-4 max-w-lg font-display text-xl leading-snug text-text-primary md:text-2xl"
+          >
+            {report?.headline}
+          </motion.h1>
         </div>
 
-        {!currentUser ? (
-          <button
-            type="button"
-            onClick={async () => {
-              trackEvent("cta_clicked", { location: "results" });
-              if (!isConfigured) {
-                setToast("Backend not configured. Add Firebase keys to .env.");
-                setTimeout(() => setToast(""), 3000);
-                return;
-              }
-              try {
-                await signInWithGoogle();
-                setToast("Signed in! Score saved.");
-                setTimeout(() => setToast(""), 3000);
-              } catch (err) {
-                console.error("Sign in failed", err);
-              }
-            }}
-            className="mt-2 text-sm text-text-secondary transition hover:text-text-primary"
-          >
-            Create Free Account to Save Your Progress
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              if (onViewHistory) onViewHistory();
-            }}
-            className="mt-2 text-sm text-accent-cyan transition hover:opacity-80"
-          >
-            View Your History Dashboard →
-          </button>
+        {radarData.length >= 3 && (
+          <motion.div variants={up} className="mt-6">
+            <Suspense fallback={<div className="skeleton mx-auto h-[260px] w-full rounded-3xl-soft" />}>
+              <DomainRadar data={radarData} height={260} />
+            </Suspense>
+          </motion.div>
         )}
-        
-        <button
-          type="button"
-          onClick={onReset}
-          className="mt-6 min-h-11 rounded-2xl-soft border border-white/15 px-5 py-2 text-xs text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+
+        <motion.div
+          variants={up}
+          className="mt-4 grid grid-cols-2 gap-2.5 px-1 sm:grid-cols-4"
         >
-          Start New Scan
-        </button>
+          {(report?.domains ?? []).map((domain) => {
+            const Icon = iconFor(domain.icon);
+            const a = accentOf(domain.accent);
+            return (
+              <div
+                key={domain.key}
+                className="rounded-2xl-soft border border-white/[0.07] bg-white/[0.03] p-3.5 text-center"
+              >
+                <Icon className={`mx-auto h-4 w-4 ${a.text}`} aria-hidden="true" />
+                <div className="mt-1.5 text-2xs uppercase tracking-wider text-text-tertiary">
+                  {domain.short}
+                </div>
+                <div className={`mt-0.5 font-mono text-2xl ${a.text}`} data-tabular>
+                  {domain.score}
+                </div>
+                <div className="mt-1.5">
+                  <Meter value={domain.percentile} accent={domain.accent} height={3} />
+                </div>
+                <div className="mt-1 text-2xs text-text-tertiary">{domain.tier.label}</div>
+              </div>
+            );
+          })}
+        </motion.div>
+      </div>
+
+      {/* Session rewards */}
+      <motion.div variants={up} className="mt-5 flex flex-wrap justify-center gap-2">
+        {sessionMeta?.xpGained > 0 && (
+          <Pill accent="cyan" icon={Zap}>
+            +{sessionMeta.xpGained} XP
+          </Pill>
+        )}
+        {sessionMeta?.streak?.current > 0 && (
+          <Pill accent="amber" icon={Flame}>
+            {sessionMeta.streak.current} day streak
+          </Pill>
+        )}
+        {(report?.domains ?? []).some((d) => d.isPersonalBest && d.sessions > 1) && (
+          <Pill accent="emerald" icon={Sparkles}>
+            New personal best
+          </Pill>
+        )}
       </motion.div>
+
+      {/* New achievements */}
+      <AnimatePresence>
+        {newAchievements.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2, type: "spring", stiffness: 320, damping: 26 }}
+            className="mt-5"
+          >
+            <Card glow="cyan" className="p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Award className="h-4 w-4 text-accent-cyan" aria-hidden="true" />
+                <span className="eyebrow">
+                  {newAchievements.length} achievement{newAchievements.length === 1 ? "" : "s"} unlocked
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {newAchievements.map((id) => {
+                  const achievement = ACHIEVEMENT_MAP[id];
+                  if (!achievement) return null;
+                  const Icon = iconFor(achievement.icon);
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-2 rounded-xl-soft border border-accent-cyan/25 bg-accent-cyan/[0.07] px-3 py-2"
+                    >
+                      <Icon className="h-3.5 w-3.5 text-accent-cyan" aria-hidden="true" />
+                      <span className="text-xs text-text-primary">{achievement.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* The hook into the report */}
+      <motion.div variants={up} className="mt-5">
+        <Card strong glow="violet" className="p-6">
+          <p className="eyebrow mb-2">Your full report is ready</p>
+          <h2 className="font-display text-xl text-text-primary">
+            {report?.findings?.length
+              ? `${report.findings.length} pattern${report.findings.length === 1 ? "" : "s"} found in your trial data`
+              : "Every domain, every measure, explained"}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+            {report?.findings?.length
+              ? `Including ${report.findings[0].title.toLowerCase()} — with the evidence behind it and exactly what fixes it.`
+              : "Percentiles, reaction-time consistency, interference cost, and a plan built from your weakest domain."}
+          </p>
+          <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+            <Button variant="primary" size="lg" magnetic iconRight={ArrowRight} onClick={onViewReport}>
+              View full report
+            </Button>
+            <Button variant="secondary" size="lg" icon={FileText} onClick={onStartPlan}>
+              Build 28-day plan
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+
+      {/* Secondary actions */}
+      <motion.div variants={up} className="mt-6 flex flex-wrap justify-center gap-2.5">
+        <Button variant="secondary" size="md" icon={Share2} onClick={handleShare}>
+          Share
+        </Button>
+        <Button variant="ghost" size="md" icon={RotateCcw} onClick={onRescan}>
+          Scan again
+        </Button>
+        <Button variant="ghost" size="md" icon={Home} onClick={onHome}>
+          Home
+        </Button>
+      </motion.div>
+
+      {toast.node}
     </motion.section>
   );
 }

@@ -1,37 +1,29 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth, signInWithGoogle, logout, isConfigured } from "../lib/firebase";
+import { createContext, useContext, useEffect, useState } from "react";
+import { isConfigured, logout, signInWithGoogle, watchAuth } from "../lib/firebase";
 
-const AuthContext = createContext();
+const AuthContext = createContext({
+  currentUser: null,
+  signInWithGoogle,
+  logout,
+  isConfigured: false,
+});
 
+/**
+ * Auth is entirely optional here. Children render immediately rather than
+ * waiting on Firebase, because a signed-out visitor should never see a loading
+ * screen for a feature they are not using.
+ */
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isConfigured || !auth) {
-      setLoading(false);
-      return;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    if (!isConfigured) return undefined;
+    return watchAuth(setCurrentUser);
   }, []);
 
-  const value = {
-    currentUser,
-    signInWithGoogle,
-    logout,
-    isConfigured
-  };
-
   return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
+    <AuthContext.Provider value={{ currentUser, signInWithGoogle, logout, isConfigured }}>
+      {children}
     </AuthContext.Provider>
   );
 }

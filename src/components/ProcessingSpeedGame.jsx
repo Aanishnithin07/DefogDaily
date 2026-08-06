@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRandom } from "../lib/random";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
+import { cue } from "../lib/feedback";
 
 const TEST_DURATION_MS = 30_000;
 const INPUT_LOCK_MS = 170;
@@ -160,12 +161,9 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
     }
     if (currentNumber == null || numberRenderedAtRef.current == null) return;
 
-    if (source === "touch" && typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(10);
-    }
-
     const isOdd = currentNumber % 2 !== 0;
     const isCorrect = choice === "odd" ? isOdd : !isOdd;
+    cue(isCorrect ? "correct" : "wrong");
     const reactionMs = now - numberRenderedAtRef.current;
     const elapsedMs = now - startedAtRef.current;
     const digitLength = `${currentNumber}`.length;

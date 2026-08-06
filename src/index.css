@@ -2,6 +2,156 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  overflow-x: hidden;
+@layer base {
+  :root {
+    color-scheme: dark;
+    /* Safe-area helpers so the bottom nav clears the iOS home indicator. */
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    overflow-x: hidden;
+    background-color: #0b0e14;
+    /* Prevent iOS text inflation from breaking the tight numeric layouts. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Numerals must never jitter while a counter animates. */
+  .font-mono,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  ::selection {
+    background: rgba(62, 217, 213, 0.28);
+    color: #f5f8ff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(245, 248, 255, 0.1);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(62, 217, 213, 0.35);
+    background-clip: content-box;
+  }
+
+  /* One consistent focus treatment across every interactive element. */
+  :focus-visible {
+    outline: 2px solid #3ed9d5;
+    outline-offset: 2px;
+    border-radius: 0.6rem;
+  }
+}
+
+@layer components {
+  /* The signature surface: translucent card, inner highlight, ambient depth. */
+  .glass {
+    @apply relative rounded-3xl-soft border border-white/[0.08] bg-white/[0.035] backdrop-blur-xl shadow-lift;
+  }
+
+  .glass-strong {
+    @apply relative rounded-3xl-soft border border-white/[0.10] bg-bg-card/70 backdrop-blur-2xl shadow-lift-lg;
+  }
+
+  /* Hairline highlight along the top edge — reads as light catching an edge. */
+  .glass::before,
+  .glass-strong::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.14),
+      rgba(255, 255, 255, 0) 42%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent-cyan via-text-primary to-accent-violet bg-clip-text text-transparent;
+  }
+
+  .text-gradient-cyan {
+    @apply bg-gradient-to-br from-accent-cyan to-accent-violet bg-clip-text text-transparent;
+  }
+
+  /* Eyebrow label used above section headings. */
+  .eyebrow {
+    @apply font-display text-2xs uppercase tracking-widest2 text-text-tertiary;
+  }
+
+  .hairline {
+    @apply border-white/[0.08];
+  }
+
+  /* Loading placeholder with a travelling sheen rather than a flat pulse. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-xl-soft bg-white/[0.05];
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.07),
+      transparent
+    );
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: calc(1rem + var(--safe-b));
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Applied to game surfaces so a fast double-tap never zooms the page. */
+  .touch-none-safe {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Users who ask for less motion get none of the ambient loops. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
