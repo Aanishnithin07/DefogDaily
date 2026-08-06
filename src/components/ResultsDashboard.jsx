@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import * as htmlToImage from "html-to-image";
 import confetti from "canvas-confetti";
@@ -46,7 +46,6 @@ export default function ResultsDashboard({
   const up = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
   const stagger = useMemo(() => staggerContainer(0.12, 0.35), []);
 
-  const scores = report?.scores ?? {};
   const composite = report?.index?.index ?? result?.scores?.aggregate ?? 0;
   const percentile = report?.index?.percentile ?? 50;
 

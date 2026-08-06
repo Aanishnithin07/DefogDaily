@@ -500,7 +500,7 @@ export function Disclosure({ summary, children, defaultOpen = false, accent = "s
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none"
+        className="no-print flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none"
       >
         <span className={`text-sm font-medium ${open ? a.text : "text-text-secondary"}`}>{summary}</span>
         <motion.span
@@ -516,6 +516,7 @@ export function Disclosure({ summary, children, defaultOpen = false, accent = "s
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
+            data-print-expand
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}

@@ -30,7 +30,6 @@ import {
   Card,
   EmptyState,
   Meter,
-  Pill,
   ScoreRing,
   SectionTitle,
   Sparkline,

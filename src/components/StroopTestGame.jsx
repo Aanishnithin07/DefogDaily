@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRandom } from "../lib/random";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
+import { springTap } from "../lib/motion";
 import { cue } from "../lib/feedback";
+import GameShell from "./games/GameShell";
 
 const TEST_DURATION_MS = 30_000;
 const INPUT_LOCK_MS = 300; 
@@ -38,8 +39,6 @@ export default function StroopTestGame({ onComplete }) {
   const timeoutRef = useRef(null);
   const bestStreakRef = useRef(0);
   const statRef = useRef({ correctAnswers: 0, totalAttempts: 0, streak: 0 });
-
-  const sectionVariants = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
 
   const progress = useMemo(() => Math.max(0, remainingMs / TEST_DURATION_MS), [remainingMs]);
 
@@ -222,43 +221,18 @@ export default function StroopTestGame({ onComplete }) {
   );
 
   return (
-    <motion.section
-      variants={sectionVariants}
-      initial="hidden"
-      animate="show"
-      exit="hidden"
-      className="relative overflow-hidden rounded-3xl-soft border border-white/10 bg-bg-card/70 p-5 backdrop-blur-xl md:p-7"
+    <GameShell
+      title="Interference Control · Stroop"
+      subtitle="Name the ink colour, not the word"
+      accent="amber"
+      progress={progress}
+      timerLabel={`${Math.max(0, remainingMs / 1000).toFixed(1)}s`}
+      liveMessage={liveMessage}
+      stats={[
+        { label: "Streak", value: streak },
+        { label: "Correct", value: `${correctAnswers}/${totalAttempts}` },
+      ]}
     >
-      <p aria-live="polite" className="sr-only">
-        {liveMessage}
-      </p>
-
-      <div className="mb-6">
-        <div className="mb-2 flex items-center justify-between text-xs text-text-secondary">
-          <span>Interference Control (Stroop)</span>
-          <span className="font-mono">{Math.max(0, remainingMs / 1000).toFixed(1)}s</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-bg-elevated">
-          <motion.div
-            className="h-full origin-left bg-accent-cyan"
-            style={{ scaleX: progress }}
-            transition={{ duration: 0 }}
-          />
-        </div>
-      </div>
-
-      <div className="mb-4 flex items-center justify-between text-sm text-text-secondary">
-        <div>
-          Streak: <span className="font-mono text-text-primary">{streak}</span>
-        </div>
-        <div>
-          Correct:{" "}
-          <span className="font-mono text-text-primary">
-            {correctAnswers}/{totalAttempts}
-          </span>
-        </div>
-      </div>
-
       <div className="relative mb-8 flex min-h-[180px] flex-col items-center justify-center md:min-h-[220px]">
         <AnimatePresence>
           {feedback.type === "correct" && !prefersReducedMotion && (
@@ -328,6 +302,6 @@ export default function StroopTestGame({ onComplete }) {
           </motion.button>
         ))}
       </div>
-    </motion.section>
+    </GameShell>
   );
 }

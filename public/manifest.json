@@ -1,15 +1,40 @@
 {
-  "name": "DefogDaily",
+  "name": "DefogDaily — Cognitive Assessment & Training",
   "short_name": "DefogDaily",
+  "description": "Measure eight cognitive domains, find out exactly where you are weak, and train it with a 28-day protocol. Free, forever.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#0B0E14",
   "theme_color": "#0B0E14",
+  "categories": ["health", "education", "productivity"],
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daily Scan",
+      "short_name": "Scan",
+      "description": "Run today's three-minute cognitive scan",
+      "url": "/?action=daily"
+    },
+    {
+      "name": "Practise",
+      "short_name": "Practise",
+      "description": "Drill your weakest domain",
+      "url": "/?action=practice"
     }
   ]
 }

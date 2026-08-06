@@ -144,6 +144,41 @@
   }
 }
 
+/* The report offers "Save as PDF", so printing has to produce a real document:
+   navigation and controls gone, cards kept whole across page breaks, and the
+   dark palette preserved rather than dropped to unreadable grey-on-white. */
+@media print {
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #0b0e14 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .glass,
+  .glass-strong,
+  article,
+  section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Expanded state cannot be toggled on paper, so show every detail block. */
+  [data-print-expand] {
+    height: auto !important;
+    opacity: 1 !important;
+    overflow: visible !important;
+  }
+
+  .md\:pl-16 {
+    padding-left: 0 !important;
+  }
+}
+
 /* Users who ask for less motion get none of the ambient loops. */
 @media (prefers-reduced-motion: reduce) {
   *,

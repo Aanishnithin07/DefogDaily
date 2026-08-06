@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRandom } from "../lib/random";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
+import { springTap } from "../lib/motion";
 import { cue } from "../lib/feedback";
+import GameShell from "./games/GameShell";
 
 const TEST_DURATION_MS = 30_000;
 const INPUT_LOCK_MS = 170;
@@ -60,8 +61,6 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
   const bestStreakRef = useRef(0);
   const statRef = useRef({ correctAnswers: 0, totalAttempts: 0, streak: 0 });
 
-  const sectionVariants = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
-
   const progress = useMemo(() => Math.max(0, remainingMs / TEST_DURATION_MS), [remainingMs]);
 
   const clearDeferredNext = useCallback(() => {
@@ -110,11 +109,14 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
     );
   }, [clearDeferredNext, onComplete]);
 
-  const mountNextNumber = useCallback((elapsedMs) => {
-    const next = nextDistinctNumber(lastNumberRef.current, elapsedMs, initialDifficulty);
-    lastNumberRef.current = next;
-    setCurrentNumber(next);
-  }, []);
+  const mountNextNumber = useCallback(
+    (elapsedMs) => {
+      const next = nextDistinctNumber(lastNumberRef.current, elapsedMs, initialDifficulty);
+      lastNumberRef.current = next;
+      setCurrentNumber(next);
+    },
+    [initialDifficulty]
+  );
 
   useEffect(() => {
     if (currentNumber != null) {
@@ -151,7 +153,7 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
     };
   }, [clearDeferredNext, finalize, mountNextNumber]);
 
-  const handleAnswer = useCallback((choice, source) => {
+  const handleAnswer = useCallback((choice) => {
     const now = performance.now();
     if (finishedRef.current) return;
     if (now < lockUntilRef.current) return;
@@ -212,11 +214,11 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
       if (event.repeat) return;
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        handleAnswer("odd", "keyboard");
+        handleAnswer("odd");
       }
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        handleAnswer("even", "keyboard");
+        handleAnswer("even");
       }
     };
 
@@ -225,43 +227,18 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
   }, [handleAnswer]);
 
   return (
-    <motion.section
-      variants={sectionVariants}
-      initial="hidden"
-      animate="show"
-      exit="hidden"
-      className="relative overflow-hidden rounded-3xl-soft border border-white/10 bg-bg-card/70 p-5 backdrop-blur-xl md:p-7"
+    <GameShell
+      title="Processing Speed · Odd or Even"
+      subtitle="Decide as fast as you can without guessing"
+      accent="cyan"
+      progress={progress}
+      timerLabel={`${Math.max(0, remainingMs / 1000).toFixed(1)}s`}
+      liveMessage={liveMessage}
+      stats={[
+        { label: "Streak", value: streak },
+        { label: "Correct", value: `${correctAnswers}/${totalAttempts}` },
+      ]}
     >
-      <p aria-live="polite" className="sr-only">
-        {liveMessage}
-      </p>
-
-      <div className="mb-6">
-        <div className="mb-2 flex items-center justify-between text-xs text-text-secondary">
-          <span>Processing Speed</span>
-          <span className="font-mono">{Math.max(0, remainingMs / 1000).toFixed(1)}s</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-bg-elevated">
-          <motion.div
-            className="h-full origin-left bg-accent-cyan"
-            style={{ scaleX: progress }}
-            transition={{ duration: 0 }}
-          />
-        </div>
-      </div>
-
-      <div className="mb-4 flex items-center justify-between text-sm text-text-secondary">
-        <div>
-          Streak: <span className="font-mono text-text-primary">{streak}</span>
-        </div>
-        <div>
-          Correct:{" "}
-          <span className="font-mono text-text-primary">
-            {correctAnswers}/{totalAttempts}
-          </span>
-        </div>
-      </div>
-
       <div className="relative mb-8 grid min-h-[180px] place-items-center md:min-h-[220px]">
         <AnimatePresence>
           {feedback.type === "correct" && !prefersReducedMotion && (
@@ -316,7 +293,7 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
           type="button"
           whileTap={{ scale: 0.98 }}
           transition={springTap}
-          onClick={() => handleAnswer("odd", "touch")}
+          onClick={() => handleAnswer("odd")}
           className="min-h-12 rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-left text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet"
         >
           <span className="block font-display text-base">Odd</span>
@@ -326,13 +303,13 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
           type="button"
           whileTap={{ scale: 0.98 }}
           transition={springTap}
-          onClick={() => handleAnswer("even", "touch")}
+          onClick={() => handleAnswer("even")}
           className="min-h-12 rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-left text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
         >
           <span className="block font-display text-base">Even</span>
           <span className="block text-xs text-text-secondary">Right Arrow</span>
         </motion.button>
       </div>
-    </motion.section>
+    </GameShell>
   );
 }

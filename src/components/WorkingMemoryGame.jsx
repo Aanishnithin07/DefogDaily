@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { fadeIn, fadeInUp, springTap, useReducedMotionVariant } from "../lib/motion";
 import { cue } from "../lib/feedback";
+import GameShell from "./games/GameShell";
 import { getRandom, shuffleArray } from "../lib/random";
 
 const MEMORIZE_DURATION_MS = 5_000;
@@ -80,7 +81,6 @@ export default function WorkingMemoryGame({ onComplete }) {
   const rafRef = useRef(null);
   const submitTimeoutRef = useRef(null);
 
-  const sectionVariants = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
   const transitionVariants = useReducedMotionVariant(prefersReducedMotion, fadeInUp, fadeIn);
 
   const clearSubmitTimeout = useCallback(() => {
@@ -206,17 +206,22 @@ export default function WorkingMemoryGame({ onComplete }) {
   const memorizeProgress = Math.max(0, memorizeRemainingMs / MEMORIZE_DURATION_MS);
 
   return (
-    <motion.section
-      variants={sectionVariants}
-      initial="hidden"
-      animate="show"
-      exit="hidden"
-      className="rounded-3xl-soft border border-white/10 bg-bg-card/70 p-5 backdrop-blur-xl md:p-7"
+    <GameShell
+      title="Verbal Working Memory · Recall"
+      subtitle={
+        phase === "memorize"
+          ? "Memorise these five words"
+          : "Pick the five you saw — the others are same-category decoys"
+      }
+      accent="violet"
+      progress={phase === "memorize" ? memorizeProgress : 1}
+      timerLabel={
+        phase === "memorize"
+          ? `${Math.ceil(memorizeRemainingMs / 1000)}s`
+          : `${selectionCount}/${MAX_SELECTIONS}`
+      }
+      liveMessage={liveMessage}
     >
-      <p aria-live="polite" className="sr-only">
-        {liveMessage}
-      </p>
-
       <LayoutGroup>
         <AnimatePresence mode="wait">
           {phase === "memorize" && (
@@ -227,21 +232,7 @@ export default function WorkingMemoryGame({ onComplete }) {
               animate="show"
               exit="hidden"
             >
-              <div className="mb-5">
-                <div className="mb-2 flex items-center justify-between text-xs text-text-secondary">
-                  <span>Memorize these 5 words</span>
-                  <span className="font-mono">{Math.ceil(memorizeRemainingMs / 1000)}s</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-bg-elevated">
-                  <motion.div
-                    className="h-full origin-left bg-accent-violet"
-                    style={{ scaleX: memorizeProgress }}
-                    transition={{ duration: 0 }}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid min-h-[180px] items-center gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {round.targets.map((word) => (
                   <motion.div
                     key={`memorize-${word}`}
@@ -263,19 +254,7 @@ export default function WorkingMemoryGame({ onComplete }) {
               animate="show"
               exit="hidden"
             >
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-2xl text-text-primary">Select the 5 target words</h2>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    Category context is consistent to keep memory, not obviousness, under test.
-                  </p>
-                </div>
-                <div className="rounded-2xl-soft border border-white/10 bg-bg-elevated px-3 py-2 text-sm text-text-primary">
-                  <span className="font-mono">{selectionCount}/5</span> selected
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 md:grid-cols-4">
+              <div className="grid grid-cols-3 gap-2.5 md:grid-cols-4 md:gap-3">
                 {round.recallWords.map((word) => {
                   const selected = selectedWords.includes(word);
                   const isTarget = round.targets.includes(word);
@@ -333,6 +312,6 @@ export default function WorkingMemoryGame({ onComplete }) {
           )}
         </AnimatePresence>
       </LayoutGroup>
-    </motion.section>
+    </GameShell>
   );
 }

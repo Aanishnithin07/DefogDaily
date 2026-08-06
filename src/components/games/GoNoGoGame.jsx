@@ -18,7 +18,6 @@ import GameShell, { FeedbackFlash } from "./GameShell";
 
 const STIM_MS = 720;
 const ISI_MS = 560;
-const TRIAL_MS = STIM_MS + ISI_MS;
 const GRACE_MS = 220;
 const NO_GO_RATE = 0.26;
 

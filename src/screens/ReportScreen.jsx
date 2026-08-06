@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Download,
   Eye,
+  FileText,
   Info,
   Sparkles,
   Target,
@@ -22,6 +23,7 @@ import {
   Card,
   CountUp,
   Disclosure,
+  EmptyState,
   Meter,
   Pill,
   ScoreRing,
@@ -347,7 +349,65 @@ function FindingCard({ finding, onPractice }) {
   );
 }
 
-export default function ReportScreen({ report, onBack, onStartPlan, onPractice, hasPlan }) {
+const SECTIONS = [
+  { id: "report-overview", label: "Overview" },
+  { id: "report-systems", label: "Systems" },
+  { id: "report-diagnosis", label: "Diagnosis" },
+  { id: "report-detail", label: "Detail" },
+  { id: "report-plan", label: "Plan" },
+];
+
+/**
+ * A full report runs long — that is the point, it is the thing other apps
+ * charge for. A sticky rail keeps it navigable instead of overwhelming, and
+ * tracks which section you are actually looking at.
+ */
+function SectionNav() {
+  const [active, setActive] = useState(SECTIONS[0].id);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) setActive(visible.target.id);
+      },
+      { rootMargin: "-96px 0px -60% 0px", threshold: 0 }
+    );
+    SECTIONS.forEach(({ id }) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="no-print sticky top-0 z-30 -mx-4 mb-6 border-b border-white/[0.06] bg-bg-void/75 px-4 py-2.5 backdrop-blur-xl md:-mx-6 md:px-6">
+      <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+        {SECTIONS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() =>
+              document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            aria-current={active === id ? "true" : undefined}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-2xs uppercase tracking-wider transition-colors focus-visible:outline-none ${
+              active === id
+                ? "bg-accent-cyan/12 text-accent-cyan"
+                : "text-text-tertiary hover:text-text-secondary"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function ReportScreen({ report, onBack, onStartPlan, onPractice, onStartScan, hasPlan }) {
   const profile = useStore((s) => s.profile);
 
   const radarData = useMemo(
@@ -364,11 +424,17 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
 
   if (!report?.index) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-text-secondary">No report available yet. Run a scan first.</p>
-        <Button variant="secondary" className="mt-6" onClick={onBack} icon={ArrowLeft}>
-          Back
-        </Button>
+      <div className="mx-auto max-w-3xl px-4 pb-28 pt-16 md:px-6">
+        <EmptyState
+          icon={FileText}
+          title="No report yet"
+          body="Your report is generated from trial-level data — reaction times, error patterns, interference cost. Run a scan and it will be waiting here the moment you finish."
+          action={
+            <Button variant="primary" size="lg" magnetic onClick={() => onStartScan?.("daily")}>
+              Run a scan · 3 min
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -380,7 +446,7 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
       animate="show"
       className="mx-auto max-w-3xl px-4 pb-28 pt-5 md:px-6 md:pb-16 md:pt-8"
     >
-      <header className="mb-6 flex items-center justify-between gap-3">
+      <header className="no-print mb-6 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onBack}
@@ -394,7 +460,9 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
         </Button>
       </header>
 
-      <motion.div variants={fadeInUp}>
+      <SectionNav />
+
+      <motion.div variants={fadeInUp} id="report-overview" className="scroll-mt-20">
         <HeroBlock report={report} />
       </motion.div>
 
@@ -425,7 +493,7 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
 
       {/* Pillars */}
       {report.pillars.length > 0 && (
-        <motion.section variants={fadeInUp} className="mt-8">
+        <motion.section variants={fadeInUp} id="report-systems" className="mt-8 scroll-mt-20">
           <SectionTitle eyebrow="Systems" title="The four systems behind the score" />
           <div className="grid gap-3 sm:grid-cols-2">
             {report.pillars.map((pillar) => {
@@ -456,7 +524,7 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
       )}
 
       {/* Findings — the actual diagnosis */}
-      <motion.section variants={fadeInUp} className="mt-8">
+      <motion.section variants={fadeInUp} id="report-diagnosis" className="mt-8 scroll-mt-20">
         <SectionTitle
           eyebrow="Diagnosis"
           title={
@@ -529,7 +597,7 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
       )}
 
       {/* Domain detail */}
-      <motion.section variants={fadeInUp} className="mt-8">
+      <motion.section variants={fadeInUp} id="report-detail" className="mt-8 scroll-mt-20">
         <SectionTitle eyebrow="Detail" title="Every domain, every measure" />
         <div className="space-y-3">
           {report.domains.map((domain) => (
@@ -548,7 +616,7 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
       </motion.section>
 
       {/* The plan CTA */}
-      <motion.section variants={fadeInUp} className="mt-8">
+      <motion.section variants={fadeInUp} id="report-plan" className="mt-8 scroll-mt-20">
         <Card strong glow="violet" className="p-6 md:p-7">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-accent-violet" aria-hidden="true" />

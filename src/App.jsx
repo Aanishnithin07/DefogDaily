@@ -279,6 +279,7 @@ function AppInner() {
         onBack={() => navigate(result ? "results" : "landing")}
         onStartPlan={() => navigate("train")}
         onPractice={(domainKey) => startDrill(domainKey)}
+        onStartScan={startScan}
       />
     ),
     train: (
@@ -293,9 +294,7 @@ function AppInner() {
     progress: <ProgressScreen onBack={() => navigate("landing")} />,
   };
 
-  // The report tab is only meaningful once something has been measured.
-  const activeScreen =
-    view === "report" && !report ? screens.landing : screens[view] ?? screens.landing;
+  const activeScreen = screens[view] ?? screens.landing;
 
   return (
     <>
