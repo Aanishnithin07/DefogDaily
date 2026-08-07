@@ -97,7 +97,7 @@ export default function ResultsDashboard({
       .slice(0, 4)
       .map((d) => `${d.short} ${d.score}`)
       .join(" · ");
-    const text = `DefogDaily · Cognitive Index ${composite} (${ordinal(percentile)} percentile)\n${domainText}\nFree cognitive testing and training at defogdaily.com`;
+    const text = `DefogDaily · Cognitive Index ${composite} (${ordinal(percentile)} percentile)\n${domainText}\nFree cognitive testing and training at defogdaily.vercel.app`;
 
     let dataUrl = null;
     let file = null;
