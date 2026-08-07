@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, PauseCircle, Volume2, VolumeX } from "lucide-react";
 import { defogReveal, fadeIn, scaleIn, useReducedMotionVariant } from "./lib/motion";
 import { trackEvent } from "./lib/analytics";
-import { initializeRandomizer } from "./lib/random";
+import { initializeRandomizer, selectStream } from "./lib/random";
 import { normalizeScores } from "./lib/scoring";
 import { DOMAINS, SCAN_MODES, estimateScanSeconds } from "./lib/domains";
 import { cue, primeAudio, toggleSound } from "./lib/feedback";
@@ -74,7 +74,7 @@ class GameErrorBoundary extends Component {
   }
 }
 
-function Countdown({ onComplete, label }) {
+function Countdown({ onComplete, label, hint, step, total }) {
   const prefersReducedMotion = useReducedMotion();
   const [index, setIndex] = useState(0);
   const doneRef = useRef(false);
@@ -101,7 +101,13 @@ function Countdown({ onComplete, label }) {
   return (
     <section className="grid min-h-[380px] place-items-center text-center">
       <div>
-        <p className="eyebrow mb-6">{label}</p>
+        {step && total > 1 && (
+          <p className="mb-2 font-mono text-xs text-text-tertiary">
+            Game {step} of {total}
+          </p>
+        )}
+        <p className="eyebrow mb-2">{label}</p>
+        {hint && <p className="mb-6 max-w-xs text-sm text-text-secondary">{hint}</p>}
         <AnimatePresence mode="wait">
           <motion.div
             key={String(COUNTDOWN[index])}
@@ -197,6 +203,7 @@ export default function GameEngine({
   drillConfig = null,
   onFinish,
   onExit,
+  onAbandon,
 }) {
   const prefersReducedMotion = useReducedMotion();
   const profile = useStore((s) => s.profile);
@@ -207,12 +214,16 @@ export default function GameEngine({
     () => domainsOverride ?? modeConfig.domains,
     [domainsOverride, modeConfig.domains]
   );
+  /** A single-domain run launched from Practice or the protocol is a drill. */
+  const isDrill = (domainsOverride?.length ?? 0) === 1;
 
   const [phase, setPhase] = useState("intro"); // intro | countdown | playing | wrapping
   const [stepIndex, setStepIndex] = useState(0);
   const [announcement, setAnnouncement] = useState("Scan intro");
   const [interrupted, setInterrupted] = useState(false);
   const [attemptKey, setAttemptKey] = useState(0);
+  const [confirmExit, setConfirmExit] = useState(false);
+  const redoRef = useRef(null);
   const scoresRef = useRef({});
   const startedAtRef = useRef(null);
   const interruptedRef = useRef(false);
@@ -279,13 +290,44 @@ export default function GameEngine({
   const finishScan = useCallback(() => {
     const rawScores = scoresRef.current;
     const scores = normalizeScores(rawScores);
+    /**
+     * Report only the domains that actually produced data. Skipped and
+     * interrupted games used to be counted as measured, which awarded XP for
+     * them, unlocked the eight-domain "Full Spectrum" achievement for a run
+     * where nothing was answered, and wrote zeroes into the profile.
+     */
+    const measured = domains.filter((key) => typeof scores[key] === "number");
     const durationMs = startedAtRef.current
       ? Math.round(performance.now() - startedAtRef.current)
       : null;
-    trackEvent("scan_finished", { mode, composite: scores.aggregate });
+
+    trackEvent("scan_finished", { mode, composite: scores.aggregate, measured: measured.length });
     setPhase("wrapping");
-    onFinish?.({ rawScores, scores, durationMs, mode, domains });
-  }, [domains, mode, onFinish]);
+
+    if (measured.length === 0) {
+      // Nothing was measured, so there is nothing to record. Bail out rather
+      // than saving an empty session that pollutes history and streaks.
+      onAbandon?.();
+      return;
+    }
+    onFinish?.({ rawScores, scores, durationMs, mode, domains: measured });
+  }, [domains, mode, onAbandon, onFinish]);
+
+  /** Advance to the next game, or finish. Shared by completion and skip. */
+  const advance = useCallback(() => {
+    setStepIndex((current) => {
+      const next = current + 1;
+      if (next >= domains.length) {
+        // Defer so this state update commits before the parent swaps screens.
+        window.setTimeout(finishScan, 0);
+        return current;
+      }
+      // Every game gets its own countdown, so the timer and first stimulus are
+      // never live before the player has read what the game asks of them.
+      setPhase("countdown");
+      return next;
+    });
+  }, [domains.length, finishScan]);
 
   const handleGameComplete = useCallback(
     (domainKey, score, metrics = {}) => {
@@ -298,32 +340,16 @@ export default function GameEngine({
         [domainKey]: { ...score, raw: { ...(score.raw ?? {}), ...metrics } },
       };
       trackEvent("game_completed", { domain: domainKey });
-
-      setStepIndex((current) => {
-        const next = current + 1;
-        if (next >= domains.length) {
-          // Defer so this state update commits before the parent swaps screens.
-          window.setTimeout(finishScan, 0);
-          return current;
-        }
-        return next;
-      });
+      advance();
     },
-    [domains.length, finishScan]
+    [advance]
   );
 
   const skipCurrent = useCallback(() => {
     interruptedRef.current = false;
     setInterrupted(false);
-    setStepIndex((current) => {
-      const next = current + 1;
-      if (next >= domains.length) {
-        window.setTimeout(finishScan, 0);
-        return current;
-      }
-      return next;
-    });
-  }, [domains.length, finishScan]);
+    advance();
+  }, [advance]);
 
   const currentDomain = domains[stepIndex];
 
@@ -338,12 +364,24 @@ export default function GameEngine({
   const renderGame = () => {
     const GameComponent = GAME_COMPONENTS[currentDomain];
     if (!GameComponent) return null;
+    // Point the seeded generator at this game's own stream before it mounts and
+    // draws its first item, so a daily puzzle is identical for everyone.
+    selectStream(currentDomain, attemptKey);
     return (
       <GameComponent
         // Bumping attemptKey remounts the game, discarding an interrupted run.
         key={`${currentDomain}-${attemptKey}`}
         onComplete={handleGameComplete}
-        initialDifficulty={profile[currentDomain]?.ema ?? 0}
+        /**
+         * A scan is a measurement, so it must be the SAME test every time —
+         * identical starting difficulty for every user on every run. Seeding
+         * difficulty from stored history made scores non-comparable: getting
+         * better raised the difficulty, which lowered the score, so improvement
+         * showed up as decline. Drills are training, not measurement, so they
+         * keep adapting to you.
+         */
+        initialDifficulty={isDrill ? profile[currentDomain]?.ema ?? 0 : 0}
+        adaptive={isDrill}
         drillConfig={drillConfig}
       />
     );
@@ -353,6 +391,21 @@ export default function GameEngine({
     interruptedRef.current = false;
     setInterrupted(false);
     setAttemptKey((k) => k + 1);
+  };
+
+  // Move focus into the interruption dialog so keyboard and screen-reader users
+  // land on it rather than on whatever was focused in the discarded game.
+  useEffect(() => {
+    if (interrupted) redoRef.current?.focus();
+  }, [interrupted]);
+
+  const requestExit = () => {
+    const answered = Object.keys(scoresRef.current).length;
+    if (phase === "playing" && answered > 0) {
+      setConfirmExit(true);
+      return;
+    }
+    onExit?.();
   };
 
   return (
@@ -365,8 +418,8 @@ export default function GameEngine({
         <header className="mb-6 flex items-center justify-between gap-3">
           <button
             type="button"
-            onClick={onExit}
-            className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary focus-visible:outline-none"
+            onClick={requestExit}
+            className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary"
           >
             <ArrowLeft className="h-4 w-4" />
             {phase === "intro" ? "Back" : "Exit"}
@@ -389,7 +442,60 @@ export default function GameEngine({
           />
         </header>
 
-        <GameErrorBoundary onSkip={skipCurrent} onExit={onExit}>
+        {/**
+         * Leaving mid-scan used to bin every completed game without a word.
+         * Offer to keep what has already been measured instead — a partial
+         * report is still a real report.
+         */}
+        <AnimatePresence>
+          {confirmExit && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="exit-title"
+              className="glass-strong mb-4 p-5"
+            >
+              <h3 id="exit-title" className="font-display text-lg text-text-primary">
+                Leave the scan?
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">
+                You have completed {Object.keys(scoresRef.current).length} of {domains.length}{" "}
+                {domains.length === 1 ? "game" : "games"}. You can save what you have measured so
+                far, or discard the whole run.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setConfirmExit(false);
+                    finishScan();
+                  }}
+                >
+                  Save partial results
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setConfirmExit(false)}>
+                  Keep scanning
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    setConfirmExit(false);
+                    onExit?.();
+                  }}
+                >
+                  Discard
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <GameErrorBoundary onSkip={skipCurrent} onExit={requestExit}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={phase === "playing" ? `game-${currentDomain}` : phase}
@@ -409,13 +515,24 @@ export default function GameEngine({
               )}
               {phase === "countdown" && (
                 <Countdown
-                  label={DOMAINS[domains[0]]?.label ?? "Get ready"}
+                  // The current game, not always the first — games 2..N used to
+                  // announce game 1's name.
+                  label={DOMAINS[currentDomain]?.label ?? "Get ready"}
+                  hint={DOMAINS[currentDomain]?.tagline}
+                  step={stepIndex + 1}
+                  total={domains.length}
                   onComplete={() => setPhase("playing")}
                 />
               )}
               {phase === "playing" && (
                 <div className="relative">
-                  {renderGame()}
+                  {/**
+                   * Unmount the game entirely while interrupted. Leaving it
+                   * mounted under the overlay kept its window key handlers live
+                   * and its controls in the tab order, so the "modal" could be
+                   * typed straight through. The run is discarded either way.
+                   */}
+                  {!interrupted && renderGame()}
 
                   <AnimatePresence>
                     {interrupted && (
@@ -423,14 +540,20 @@ export default function GameEngine({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 z-20 grid place-items-center rounded-3xl-soft bg-bg-void/92 p-6 text-center backdrop-blur-xl"
+                        role="alertdialog"
+                        aria-modal="true"
+                        aria-labelledby="interrupted-title"
+                        className="glass-strong grid min-h-[320px] place-items-center p-6 text-center"
                       >
                         <div className="max-w-sm">
                           <PauseCircle
                             className="mx-auto h-8 w-8 text-accent-amber"
                             aria-hidden="true"
                           />
-                          <h3 className="mt-4 font-display text-xl text-text-primary">
+                          <h3
+                            id="interrupted-title"
+                            className="mt-4 font-display text-xl text-text-primary"
+                          >
                             This reading was interrupted
                           </h3>
                           <p className="mt-2.5 text-sm leading-relaxed text-text-secondary">
@@ -439,6 +562,7 @@ export default function GameEngine({
                             than score it badly.
                           </p>
                           <Button
+                            ref={redoRef}
                             variant="primary"
                             size="md"
                             className="mt-5"
@@ -449,7 +573,7 @@ export default function GameEngine({
                           <button
                             type="button"
                             onClick={skipCurrent}
-                            className="mt-3 block w-full text-xs text-text-tertiary transition-colors hover:text-text-secondary focus-visible:outline-none"
+                            className="mt-3 block w-full text-xs text-text-tertiary transition-colors hover:text-text-secondary"
                           >
                             Skip it instead
                           </button>

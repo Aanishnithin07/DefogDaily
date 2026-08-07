@@ -19,6 +19,17 @@ import GameShell, { FeedbackFlash } from "./GameShell";
 const STIM_MS = 720;
 const ISI_MS = 560;
 const GRACE_MS = 220;
+
+/**
+ * One deadline for the whole trial.
+ *
+ * The grading timer fired at STIM_MS + GRACE_MS + ISI_MS/2 (1220ms) while the
+ * response guard rejected anything past STIM_MS + GRACE_MS (940ms). Responses
+ * landing in that 280ms gap — routine on a slow phone, or for an older user —
+ * were silently discarded and then graded as omissions, which the report reads
+ * as an attention deficit. Both now derive from this single constant.
+ */
+const RESPONSE_WINDOW_MS = STIM_MS + GRACE_MS + ISI_MS * 0.5;
 const NO_GO_RATE = 0.26;
 
 export default function GoNoGoGame({ onComplete, drillConfig = null }) {
@@ -154,7 +165,7 @@ export default function GoNoGoGame({ onComplete, drillConfig = null }) {
     stimAtRef.current = performance.now();
 
     const hideId = window.setTimeout(() => setStimulus(null), STIM_MS);
-    const gradeId = window.setTimeout(() => closeTrial(trialIndex, isGo), STIM_MS + GRACE_MS + ISI_MS * 0.5);
+    const gradeId = window.setTimeout(() => closeTrial(trialIndex, isGo), RESPONSE_WINDOW_MS);
     timersRef.current.push(hideId, gradeId);
 
     return () => {
@@ -173,8 +184,8 @@ export default function GoNoGoGame({ onComplete, drillConfig = null }) {
     const current = currentRef.current;
     if (!current || respondedRef.current || finishedRef.current) return;
     const elapsed = performance.now() - stimAtRef.current;
-    // Ignore taps in the blank gap — they belong to no trial.
-    if (elapsed > STIM_MS + GRACE_MS) return;
+    // Ignore taps past the trial's own deadline — they belong to no trial.
+    if (elapsed > RESPONSE_WINDOW_MS) return;
 
     respondedRef.current = true;
     const { isGo, index } = current;
@@ -245,7 +256,7 @@ export default function GoNoGoGame({ onComplete, drillConfig = null }) {
           type="button"
           onPointerDown={respond}
           aria-label="Respond"
-          className="grid min-h-[300px] w-full place-items-center rounded-3xl-soft border border-white/[0.06] bg-white/[0.02] transition-colors focus-visible:outline-none active:bg-white/[0.05] md:min-h-[340px]"
+          className="grid min-h-[300px] w-full place-items-center rounded-3xl-soft border border-white/[0.06] bg-white/[0.02] transition-colors active:bg-white/[0.05] md:min-h-[340px]"
         >
           <AnimatePresence mode="wait">
             {stimulus ? (

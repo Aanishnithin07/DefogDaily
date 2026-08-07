@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { DOMAINS } from "../lib/domains";
 import { buildPlan, currentDayIndex, dayTasksDone, planStats } from "../lib/trainingPlan";
-import { markPlanTask, savePlan, useStore } from "../lib/storage";
+import { liveStreak, markPlanTask, savePlan, useStore } from "../lib/storage";
 import { fadeInUp, staggerContainer } from "../lib/motion";
 import { cue } from "../lib/feedback";
 import {
@@ -49,7 +49,7 @@ function TaskRow({ task, done, onToggle, onStart }) {
             onClick={onToggle}
             aria-pressed={done}
             aria-label={done ? `Mark ${task.label} incomplete` : `Mark ${task.label} complete`}
-            className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition-colors focus-visible:outline-none ${
+            className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition-colors ${
               done
                 ? "border-success bg-success text-bg-void"
                 : "border-white/20 bg-white/[0.03] hover:border-white/40"
@@ -104,7 +104,7 @@ function DayCell({ day, done, isToday, isPast, onSelect, selected }) {
       onClick={onSelect}
       aria-label={`Day ${day.index + 1}`}
       aria-current={isToday ? "date" : undefined}
-      className={`relative grid aspect-square place-items-center rounded-xl-soft border text-xs transition-all focus-visible:outline-none ${
+      className={`relative grid aspect-square place-items-center rounded-xl-soft border text-xs transition-all ${
         selected
           ? "border-accent-cyan bg-accent-cyan/15 text-text-primary"
           : complete
@@ -152,7 +152,7 @@ export default function TrainScreen({ onBack, onStartDrill, onStartScan, latestR
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary focus-visible:outline-none"
+            className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -211,7 +211,7 @@ export default function TrainScreen({ onBack, onStartDrill, onStartScan, latestR
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary focus-visible:outline-none"
+          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -292,9 +292,9 @@ export default function TrainScreen({ onBack, onStartDrill, onStartScan, latestR
                   Day {stats.dayNumber} of 28
                 </Pill>
                 <Pill accent="cyan">Week {stats.week} · {week?.theme}</Pill>
-                {streak.current > 0 && (
+                {liveStreak(streak) > 0 && (
                   <Pill accent="amber" icon={Flame}>
-                    {streak.current} day streak
+                    {liveStreak(streak)} day streak
                   </Pill>
                 )}
                 <Pill accent="emerald" icon={Trophy}>
@@ -361,7 +361,11 @@ export default function TrainScreen({ onBack, onStartDrill, onStartScan, latestR
                 if (next) cue("correct");
               }}
               onStart={(t) => {
-                if (t.type === "scan") onStartScan?.(t.mode ?? "practice");
+                // Pass the plan task through so finishing the checkpoint ticks
+                // it off. Without this the checkbox stayed unticked forever and
+                // the protocol could never reach 100%.
+                if (t.type === "scan")
+                  onStartScan?.(t.mode ?? "practice", { planDay: viewDay, taskId: t.id });
                 else onStartDrill?.(t.domain, { planDay: viewDay, taskId: t.id });
               }}
             />

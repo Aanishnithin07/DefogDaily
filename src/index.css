@@ -1,3 +1,25 @@
+/**
+ * Self-hosted fonts.
+ *
+ * These were loaded from fonts.googleapis.com via a render-blocking <link>,
+ * which meant every visitor's IP and user-agent went to a third party before a
+ * single pixel painted — while the footer promised "no tracking" — and first
+ * paint waited on two extra DNS lookups plus TLS handshakes to another origin.
+ * Vite fingerprints these and serves them from our own origin, so they are
+ * cacheable forever and nothing leaves the site.
+ *
+ * Only the weights actually used are imported; each extra weight is a separate
+ * file on the wire.
+ */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -51,11 +73,18 @@
     background-clip: content-box;
   }
 
-  /* One consistent focus treatment across every interactive element. */
+  /**
+   * The single focus treatment for the whole app.
+   *
+   * Components used to suppress the outline per-element and, in most cases,
+   * added no replacement ring — so keyboard users had no visible focus
+   * anywhere. Nothing may suppress this rule; the outline follows each
+   * element's own border-radius automatically, so no radius is set here (doing
+   * so visibly reshaped square elements the moment they took focus).
+   */
   :focus-visible {
     outline: 2px solid #3ed9d5;
     outline-offset: 2px;
-    border-radius: 0.6rem;
   }
 }
 

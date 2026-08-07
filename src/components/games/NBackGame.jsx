@@ -133,18 +133,28 @@ export default function NBackGame({ onComplete, initialDifficulty = 0, drillConf
       const isTarget = index >= currentN && seq[index - currentN] === position;
       const didRespond = respondedRef.current;
 
+      /**
+       * The first N trials of a block cannot be targets — there is nothing N
+       * steps back yet. Counting them as correct rejections padded the
+       * denominator with unanswerable trials and understated the false-alarm
+       * rate, inflating the score. They are shown, but not scored.
+       */
+      const isLeadIn = index < currentN;
       const next = { ...tallyRef.current };
-      if (isTarget && didRespond) next.hits += 1;
-      else if (isTarget && !didRespond) next.misses += 1;
-      else if (!isTarget && didRespond) next.falseAlarms += 1;
-      else next.correctRejections += 1;
 
-      tallyRef.current = next;
-      setTally(next);
+      if (!isLeadIn) {
+        if (isTarget && didRespond) next.hits += 1;
+        else if (isTarget && !didRespond) next.misses += 1;
+        else if (!isTarget && didRespond) next.falseAlarms += 1;
+        else next.correctRejections += 1;
+
+        tallyRef.current = next;
+        setTally(next);
+      }
 
       // Misses are silent in the moment but recorded — flagging them mid-run
       // would turn this into a reaction task instead of a memory task.
-      if (isTarget && !didRespond && index >= currentN) {
+      if (isTarget && !didRespond && !isLeadIn) {
         setFeedback((prev) => ({ key: prev.key + 1, type: "wrong" }));
       }
 
@@ -331,7 +341,9 @@ export default function NBackGame({ onComplete, initialDifficulty = 0, drillConf
           size="lg"
           className="w-full"
           onClick={handleMatch}
-          disabled={responded || interBlock || trialIndex < 0}
+          // aria-disabled keeps the button focusable so keyboard focus is not
+          // dumped to <body> the instant you answer. handleMatch guards itself.
+          aria-disabled={responded || interBlock || trialIndex < 0}
           sound={null}
           icon={responded ? Check : undefined}
         >

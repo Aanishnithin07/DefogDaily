@@ -12,13 +12,17 @@ function randomInt(min, max) {
   return Math.floor(getRandom() * (max - min + 1)) + min;
 }
 
-const pickDigitsForElapsed = (elapsedMs, initialDifficulty = 0) => {
-  let progress = elapsedMs / TEST_DURATION_MS;
-  // If user has a high rolling average (e.g. > 60), start them at a harder tier
-  if (initialDifficulty > 60) {
-    progress += 0.4;
-  }
-  
+/**
+ * Digit length ramps purely with elapsed time.
+ *
+ * This used to jump straight to the hard tier once the user's stored average
+ * crossed 60, while the score formula stayed identical — so improving past that
+ * threshold handed you longer numbers, a slower mean reaction time, and a
+ * *lower* score for unchanged ability. Difficulty that history can move must
+ * never feed a score that history is compared against.
+ */
+const pickDigitsForElapsed = (elapsedMs, headStart = 0) => {
+  const progress = elapsedMs / TEST_DURATION_MS + headStart;
   if (progress < 0.4) return getRandom() < 0.5 ? 1 : 2;
   if (progress < 0.8) return getRandom() < 0.35 ? 2 : 3;
   return getRandom() < 0.2 ? 3 : 4;
@@ -30,8 +34,8 @@ const randomNumberByDigits = (digits) => {
   return randomInt(min, max);
 };
 
-const nextDistinctNumber = (previous, elapsedMs, initialDifficulty) => {
-  const digits = pickDigitsForElapsed(elapsedMs, initialDifficulty);
+const nextDistinctNumber = (previous, elapsedMs, headStart) => {
+  const digits = pickDigitsForElapsed(elapsedMs, headStart);
   let candidate = randomNumberByDigits(digits);
   while (candidate === previous) {
     candidate = randomNumberByDigits(digits);
@@ -39,8 +43,10 @@ const nextDistinctNumber = (previous, elapsedMs, initialDifficulty) => {
   return candidate;
 };
 
-export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
+export default function ProcessingSpeedGame({ onComplete, initialDifficulty = 0, adaptive = false }) {
   const prefersReducedMotion = useReducedMotion();
+  // Only a practice drill may start you further up the ramp.
+  const headStart = adaptive && initialDifficulty > 60 ? 0.4 : 0;
 
   const [currentNumber, setCurrentNumber] = useState(null);
   const [remainingMs, setRemainingMs] = useState(TEST_DURATION_MS);
@@ -111,11 +117,11 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
 
   const mountNextNumber = useCallback(
     (elapsedMs) => {
-      const next = nextDistinctNumber(lastNumberRef.current, elapsedMs, initialDifficulty);
+      const next = nextDistinctNumber(lastNumberRef.current, elapsedMs, headStart);
       lastNumberRef.current = next;
       setCurrentNumber(next);
     },
-    [initialDifficulty]
+    [headStart]
   );
 
   useEffect(() => {
@@ -294,7 +300,7 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
           whileTap={{ scale: 0.98 }}
           transition={springTap}
           onClick={() => handleAnswer("odd")}
-          className="min-h-12 rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-left text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet"
+          className="min-h-12 rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-left text-text-primary transition hover:bg-white/5"
         >
           <span className="block font-display text-base">Odd</span>
           <span className="block text-xs text-text-secondary">Left Arrow</span>
@@ -304,7 +310,7 @@ export default function ProcessingSpeedGame({ onComplete, initialDifficulty }) {
           whileTap={{ scale: 0.98 }}
           transition={springTap}
           onClick={() => handleAnswer("even")}
-          className="min-h-12 rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-left text-text-primary transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+          className="min-h-12 rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-left text-text-primary transition hover:bg-white/5"
         >
           <span className="block font-display text-base">Even</span>
           <span className="block text-xs text-text-secondary">Right Arrow</span>

@@ -21,9 +21,20 @@ const BASE_MEMORIZE_MS = 2800;
 /** Slightly more time per extra cell, but less per cell overall. */
 const memorizeMsFor = (level) => BASE_MEMORIZE_MS + (level - 1) * 240;
 
-export default function SpatialMemoryGame({ onComplete, variants, initialDifficulty = 0 }) {
+export default function SpatialMemoryGame({
+  onComplete,
+  variants,
+  initialDifficulty = 0,
+  adaptive = false,
+}) {
   const prefersReducedMotion = useReducedMotion();
-  const startLevel = initialDifficulty > 68 ? 3 : initialDifficulty > 45 ? 2 : 1;
+  /**
+   * The score is a pure function of the level reached, so starting higher used
+   * to hand out free points: a user who began at level 3 and failed instantly
+   * still scored 25, while a level-1 starter who failed instantly scored 14.
+   * A scan therefore always begins at level 1; only drills skip ahead.
+   */
+  const startLevel = adaptive ? (initialDifficulty > 68 ? 3 : initialDifficulty > 45 ? 2 : 1) : 1;
 
   const [level, setLevel] = useState(startLevel);
   const [phase, setPhase] = useState("memorize");
@@ -136,6 +147,11 @@ export default function SpatialMemoryGame({ onComplete, variants, initialDifficu
           setPhase("success");
           timersRef.current.push(window.setTimeout(() => finishGame(level, null), 1200));
         } else {
+          // Lock the grid immediately. The cells used to stay live through the
+          // 900ms celebration, so one overshooting tap — routine on a phone —
+          // registered as a wrong answer and ended the entire run, scoring it
+          // as a failure at the level the player had just cleared.
+          setPhase("cleared");
           timersRef.current.push(window.setTimeout(() => setLevel((l) => l + 1), 900));
         }
       }
@@ -158,6 +174,8 @@ export default function SpatialMemoryGame({ onComplete, variants, initialDifficu
           ? "Memorise the lit cells"
           : phase === "recall"
           ? "Rebuild the pattern"
+          : phase === "cleared"
+          ? "Level cleared — next pattern coming"
           : phase === "fail"
           ? "Scan complete"
           : "Perfect run"
@@ -224,8 +242,15 @@ export default function SpatialMemoryGame({ onComplete, variants, initialDifficu
                     : { opacity: 1, scale: 1 }
                 }
                 transition={isLit ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" } : { duration: 0.15 }}
-                disabled={phase !== "recall" || isSelected}
-                aria-label={`Grid cell ${i + 1}`}
+                /**
+                 * aria-disabled rather than disabled: a real `disabled` on the
+                 * cell you just activated removes it from the tab order while
+                 * it still holds focus, so the browser drops focus to <body>
+                 * and a keyboard user restarts the tab order mid-trial. The
+                 * click guard in handleCellClick does the actual blocking.
+                 */
+                aria-disabled={phase !== "recall" || isSelected}
+                aria-label={`Grid cell ${i + 1}${isSelected ? ", selected" : ""}`}
                 className={`h-[3.1rem] w-[3.1rem] rounded-xl-soft border transition-colors duration-150 sm:h-14 sm:w-14 md:h-16 md:w-16 ${
                   isLit
                     ? "border-accent-emerald bg-accent-emerald shadow-glow-emerald"

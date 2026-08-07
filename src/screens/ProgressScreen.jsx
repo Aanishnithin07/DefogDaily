@@ -1,4 +1,5 @@
-import { Suspense, lazy, useMemo, useState } from "react";
+import { lazy, useEffect, useMemo, useRef, useState } from "react";
+import ChartBoundary from "../components/ChartBoundary";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -7,6 +8,7 @@ import {
   Flame,
   Lock,
   LogOut,
+  Keyboard,
   Trash2,
   Trophy,
   Volume2,
@@ -19,6 +21,7 @@ import {
   clearAllData,
   exportData,
   levelForXp,
+  liveStreak,
   setPrefs,
   useStore,
 } from "../lib/storage";
@@ -40,14 +43,24 @@ import { iconFor } from "../components/ui/icons";
 
 const TrendChart = lazy(() => import("../components/charts/TrendChart"));
 
-export default function ProgressScreen({ onBack }) {
+export default function ProgressScreen({ onBack, onDataCleared }) {
   const state = useStore();
   const { currentUser, signInWithGoogle, logout, isConfigured } = useAuth();
   const toast = useToast();
   const [series, setSeries] = useState(["speed", "memory", "stroop", "spatial"]);
   const [confirmClear, setConfirmClear] = useState(false);
+  const confirmTimer = useRef(null);
+
+  useEffect(() => () => {
+    if (confirmTimer.current) window.clearTimeout(confirmTimer.current);
+  }, []);
 
   const level = levelForXp(state.xp.total);
+  // A stored streak keeps its last value forever, so read it through
+  // liveStreak — a run three weeks ago is not a live streak.
+  const currentStreak = liveStreak(state.streak);
+  // sessions[] is capped at 200 for quota reasons; totalSessions is the truth.
+  const totalSessions = state.totalSessions ?? state.sessions.length;
   const unlockedIds = useMemo(() => new Set(Object.keys(state.achievements)), [state.achievements]);
   const earnedNow = useMemo(() => new Set(evaluateAchievements(state)), [state]);
 
@@ -134,7 +147,7 @@ export default function ProgressScreen({ onBack }) {
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary focus-visible:outline-none"
+          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -163,10 +176,12 @@ export default function ProgressScreen({ onBack }) {
             <div className="min-w-0 flex-1 text-center sm:text-left">
               <p className="eyebrow mb-1.5">Your record</p>
               <h1 className="font-display text-2xl text-text-primary">
-                {state.sessions.length} session{state.sessions.length === 1 ? "" : "s"} logged
+                {totalSessions} session{totalSessions === 1 ? "" : "s"} logged
               </h1>
               <p className="mt-1.5 text-sm text-text-secondary">
-                {level.needed - level.into} XP to level {level.level + 1}
+                {level.isMax
+                  ? "Maximum level reached"
+                  : `${level.remaining} XP to level ${level.level + 1}`}
               </p>
 
               <div className="mt-4 grid grid-cols-3 gap-2">
@@ -175,7 +190,7 @@ export default function ProgressScreen({ onBack }) {
                     <Flame className="h-3 w-3 text-accent-amber" /> Streak
                   </div>
                   <div className="mt-0.5 font-mono text-xl text-text-primary" data-tabular>
-                    {state.streak.current}
+                    {currentStreak}
                   </div>
                 </div>
                 <div className="rounded-xl-soft border border-white/[0.07] bg-white/[0.03] p-2.5 text-center">
@@ -221,7 +236,7 @@ export default function ProgressScreen({ onBack }) {
                     type="button"
                     onClick={() => toggleSeries(key)}
                     aria-pressed={on}
-                    className={`rounded-full border px-2.5 py-1 text-2xs uppercase tracking-wider transition-colors focus-visible:outline-none ${
+                    className={`rounded-full border px-2.5 py-1 text-2xs uppercase tracking-wider transition-colors ${
                       on
                         ? `${a.border} ${a.soft} ${a.text}`
                         : "border-white/[0.08] text-text-tertiary hover:text-text-secondary"
@@ -232,9 +247,9 @@ export default function ProgressScreen({ onBack }) {
                 );
               })}
             </div>
-            <Suspense fallback={<div className="skeleton h-[300px] w-full rounded-3xl-soft" />}>
+            <ChartBoundary height={300} label="trend chart">
               <TrendChart data={trendData} series={series} height={300} />
-            </Suspense>
+            </ChartBoundary>
           </Card>
         )}
       </motion.section>
@@ -338,7 +353,7 @@ export default function ProgressScreen({ onBack }) {
                 setPrefs({ age: value === "" ? null : Number(value) });
               }}
               aria-label="Your age"
-              className="w-20 rounded-xl-soft border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-center font-mono text-sm text-text-primary focus-visible:outline-none"
+              className="w-20 rounded-xl-soft border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-center font-mono text-sm text-text-primary"
             />
           </div>
 
@@ -351,7 +366,7 @@ export default function ProgressScreen({ onBack }) {
               role="switch"
               aria-checked={state.prefs.sound !== false}
               onClick={() => setPrefs({ sound: state.prefs.sound === false })}
-              className={`h-6 w-11 rounded-full p-0.5 transition-colors focus-visible:outline-none ${
+              className={`h-6 w-11 rounded-full p-0.5 transition-colors ${
                 state.prefs.sound !== false ? "bg-accent-cyan" : "bg-white/15"
               }`}
             >
@@ -374,7 +389,7 @@ export default function ProgressScreen({ onBack }) {
               role="switch"
               aria-checked={state.prefs.haptics !== false}
               onClick={() => setPrefs({ haptics: state.prefs.haptics === false })}
-              className={`h-6 w-11 rounded-full p-0.5 transition-colors focus-visible:outline-none ${
+              className={`h-6 w-11 rounded-full p-0.5 transition-colors ${
                 state.prefs.haptics !== false ? "bg-accent-cyan" : "bg-white/15"
               }`}
             >
@@ -383,6 +398,35 @@ export default function ProgressScreen({ onBack }) {
                 transition={{ type: "spring", stiffness: 500, damping: 32 }}
                 className={`block h-5 w-5 rounded-full bg-bg-void ${
                   state.prefs.haptics !== false ? "ml-5" : "ml-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-white/[0.06] pt-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm text-text-primary">
+                <Keyboard className="h-4 w-4 text-text-tertiary" /> Number-key shortcuts
+              </div>
+              <p className="mt-0.5 text-xs text-text-tertiary">
+                Press 1-5 to jump between sections. Turn off if you use speech input.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={state.prefs.shortcuts !== false}
+              aria-label="Number-key shortcuts"
+              onClick={() => setPrefs({ shortcuts: state.prefs.shortcuts === false })}
+              className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors ${
+                state.prefs.shortcuts !== false ? "bg-accent-cyan" : "bg-white/15"
+              }`}
+            >
+              <motion.span
+                layout
+                transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                className={`block h-5 w-5 rounded-full bg-bg-void ${
+                  state.prefs.shortcuts !== false ? "ml-5" : "ml-0"
                 }`}
               />
             </button>
@@ -407,10 +451,16 @@ export default function ProgressScreen({ onBack }) {
               onClick={() => {
                 if (!confirmClear) {
                   setConfirmClear(true);
-                  window.setTimeout(() => setConfirmClear(false), 4000);
+                  if (confirmTimer.current) window.clearTimeout(confirmTimer.current);
+                  confirmTimer.current = window.setTimeout(() => setConfirmClear(false), 4000);
                   return;
                 }
+                if (confirmTimer.current) window.clearTimeout(confirmTimer.current);
                 clearAllData();
+                // The store is wiped, but App still holds the finished run in
+                // memory — without this the Report tab keeps rendering the
+                // report the user just asked to delete.
+                onDataCleared?.();
                 setConfirmClear(false);
                 toast.show("All local data cleared");
               }}

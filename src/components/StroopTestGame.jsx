@@ -8,11 +8,25 @@ import GameShell from "./games/GameShell";
 const TEST_DURATION_MS = 30_000;
 const INPUT_LOCK_MS = 300; 
 
+/**
+ * A dichromat-safe palette.
+ *
+ * The original red / green / yellow / blue set is the textbook Stroop palette,
+ * but under deuteranopia or protanopia — roughly 1 in 12 men — red, green and
+ * yellow collapse into near-identical mustard tones. Those users could not read
+ * the ink colour at all, scored near chance through no fault of their own, and
+ * the report then diagnosed a control deficit that did not exist, which in turn
+ * became the target of their 28-day training plan.
+ *
+ * Blue / orange / white / grey stays separable under both common forms of
+ * colour blindness on this dark background, and the paradigm works with any set
+ * of unambiguous colour names.
+ */
 const COLORS = [
-  { id: "red", hex: "#FF5C5C", label: "Red" },
-  { id: "blue", hex: "#5C94FF", label: "Blue" },
-  { id: "green", hex: "#5CFF9D", label: "Green" },
-  { id: "yellow", hex: "#FFD05C", label: "Yellow" },
+  { id: "blue", hex: "#4DA3FF", label: "Blue" },
+  { id: "orange", hex: "#FF9F45", label: "Orange" },
+  { id: "white", hex: "#F5F8FF", label: "White" },
+  { id: "grey", hex: "#8A93A6", label: "Grey" },
 ];
 
 function randomElement(arr) {
@@ -293,7 +307,7 @@ export default function StroopTestGame({ onComplete }) {
             whileTap={{ scale: 0.95 }}
             transition={springTap}
             onClick={() => handleAnswer(color.id, "touch")}
-            className="flex min-h-12 items-center justify-center rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-center transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2"
+            className="flex min-h-12 items-center justify-center rounded-2xl-soft border border-white/15 bg-bg-elevated px-4 py-3 text-center transition hover:bg-white/5"
             style={{ 
               color: color.hex, 
             }}

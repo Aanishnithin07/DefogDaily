@@ -1,7 +1,6 @@
-import { Suspense, lazy, useEffect, useMemo, useRef } from "react";
+import { lazy, useEffect, useMemo, useRef } from "react";
+import ChartBoundary from "./ChartBoundary";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import * as htmlToImage from "html-to-image";
-import confetti from "canvas-confetti";
 import {
   ArrowRight,
   Award,
@@ -58,17 +57,28 @@ export default function ResultsDashboard({
 
   // Celebrate once, scaled to how well the run actually went.
   useEffect(() => {
-    if (firedRef.current || prefersReducedMotion) return;
-    firedRef.current = true;
+    if (firedRef.current || prefersReducedMotion) return undefined;
     const delay = window.setTimeout(() => {
+      // Arm the guard here, not before the timer: StrictMode mounts, unmounts
+      // and remounts in development, and setting it up front meant the second
+      // mount saw it already armed and the celebration never ran at all.
+      firedRef.current = true;
       cue("reveal");
-      confetti({
-        particleCount: percentile > 80 ? 130 : 70,
-        spread: percentile > 80 ? 92 : 62,
-        origin: { y: 0.42 },
-        colors: ["#3ED9D5", "#8A7BFF", "#F5F8FF", "#3DDC97"],
-        disableForReducedMotion: true,
-      });
+      // canvas-confetti is ~7kB of code used on exactly one screen, after a
+      // scan. Loading it on demand keeps it out of the landing page's bundle.
+      import("canvas-confetti")
+        .then(({ default: confetti }) =>
+          confetti({
+            particleCount: percentile > 80 ? 130 : 70,
+            spread: percentile > 80 ? 92 : 62,
+            origin: { y: 0.42 },
+            colors: ["#3ED9D5", "#8A7BFF", "#F5F8FF", "#3DDC97"],
+            disableForReducedMotion: true,
+          })
+        )
+        .catch(() => {
+          /* confetti is pure decoration — never surface a failure */
+        });
     }, 900);
     return () => window.clearTimeout(delay);
   }, [percentile, prefersReducedMotion]);
@@ -93,6 +103,8 @@ export default function ResultsDashboard({
     let file = null;
     try {
       if (snapshotRef.current) {
+        // html-to-image is ~30kB and only ever runs when someone taps Share.
+        const htmlToImage = await import("html-to-image");
         dataUrl = await htmlToImage.toPng(snapshotRef.current, {
           backgroundColor: "#0B0E14",
           pixelRatio: 2,
@@ -171,9 +183,9 @@ export default function ResultsDashboard({
 
         {radarData.length >= 3 && (
           <motion.div variants={up} className="mt-6">
-            <Suspense fallback={<div className="skeleton mx-auto h-[260px] w-full rounded-3xl-soft" />}>
+            <ChartBoundary height={260} label="chart">
               <DomainRadar data={radarData} height={260} />
-            </Suspense>
+            </ChartBoundary>
           </motion.div>
         )}
 

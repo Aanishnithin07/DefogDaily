@@ -17,18 +17,24 @@ import { iconFor } from "../components/ui/icons";
  */
 export default function PracticeScreen({ onBack, onStartDrill }) {
   const profile = useStore((s) => s.profile);
+  const practice = useStore((s) => s.practice);
   const age = useStore((s) => s.prefs.age);
 
   const rows = useMemo(() => {
     return DEEP_SCAN.map((key) => {
       const domain = DOMAINS[key];
       const slot = profile[key] ?? { sessions: 0, best: 0, ema: null, history: [] };
+      // Drills train but do not measure, so reps live separately from the
+      // scan-derived level. Showing both keeps practice effort visible without
+      // implying an adaptive drill score is a measurement.
+      const reps = practice[key]?.reps ?? 0;
       const level = slot.ema ?? slot.last ?? null;
       const percentile = level != null ? percentileFor(level, key, age) : null;
       return {
         key,
         domain,
         slot,
+        reps,
         level,
         percentile,
         tier: percentile != null ? tierFor(percentile) : null,
@@ -41,7 +47,7 @@ export default function PracticeScreen({ onBack, onStartDrill }) {
       if (a.untested !== b.untested) return a.untested ? -1 : 1;
       return (a.level ?? 0) - (b.level ?? 0);
     });
-  }, [profile, age]);
+  }, [profile, practice, age]);
 
   const focus = rows.find((r) => !r.untested) ?? rows[0];
 
@@ -56,7 +62,7 @@ export default function PracticeScreen({ onBack, onStartDrill }) {
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary focus-visible:outline-none"
+          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -114,7 +120,7 @@ export default function PracticeScreen({ onBack, onStartDrill }) {
       <motion.section variants={fadeInUp}>
         <SectionTitle eyebrow="All domains" title="Pick your drill" />
         <div className="grid gap-3 sm:grid-cols-2">
-          {rows.map(({ key, domain, slot, level, percentile, history, untested }) => {
+          {rows.map(({ key, domain, slot, level, percentile, history, untested, reps }) => {
             const Icon = iconFor(domain.icon);
             const a = accentOf(domain.accent);
 
@@ -145,7 +151,11 @@ export default function PracticeScreen({ onBack, onStartDrill }) {
                   <div className="mt-4">
                     {untested ? (
                       <div className="flex items-center justify-between text-2xs text-text-tertiary">
-                        <span>Not yet measured</span>
+                        <span>
+                          {reps > 0
+                            ? `${reps} drill${reps === 1 ? "" : "s"} · scan to measure`
+                            : "Not yet measured"}
+                        </span>
                         <span>~{domain.duration}s</span>
                       </div>
                     ) : (
@@ -162,7 +172,8 @@ export default function PracticeScreen({ onBack, onStartDrill }) {
                         <div className="mt-1.5 flex justify-between text-2xs text-text-tertiary">
                           <span>Best {Math.round(slot.best)}</span>
                           <span>
-                            {slot.sessions} session{slot.sessions === 1 ? "" : "s"}
+                            {slot.sessions} scan{slot.sessions === 1 ? "" : "s"}
+                            {reps > 0 ? ` · ${reps} drill${reps === 1 ? "" : "s"}` : ""}
                           </span>
                         </div>
                       </>

@@ -304,7 +304,7 @@ export default function TaskSwitchGame({ onComplete, drillConfig = null }) {
             whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
             onClick={() => answer(side)}
-            className="min-h-14 rounded-2xl-soft border border-white/12 bg-white/[0.04] px-4 py-3 text-center transition-colors hover:bg-white/[0.09] focus-visible:outline-none"
+            className="min-h-14 rounded-2xl-soft border border-white/12 bg-white/[0.04] px-4 py-3 text-center transition-colors hover:bg-white/[0.09]"
           >
             <AnimatePresence mode="wait">
               <motion.span

@@ -32,10 +32,13 @@ const defaultState = () => ({
   achievements: {}, // { [id]: unlockedAtMs }
   plan: null,
   lastScan: null, // raw telemetry of the most recent scan, for report rebuilds
+  totalSessions: 0, // lifetime count; sessions[] is capped, this is not
+  practice: {}, // per-domain drill reps — training effort, not measurement
   prefs: {
     sound: true,
     haptics: true,
     age: null,
+    shortcuts: true,
     displayName: null,
   },
 });
@@ -67,6 +70,16 @@ const hydrate = (raw) => {
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
       plan: parsed.plan ?? null,
       lastScan: parsed.lastScan ?? null,
+      totalSessions:
+        typeof parsed.totalSessions === "number"
+          ? parsed.totalSessions
+          : Array.isArray(parsed.sessions)
+          ? parsed.sessions.length
+          : 0,
+      practice:
+        parsed.practice && typeof parsed.practice === "object" && !Array.isArray(parsed.practice)
+          ? parsed.practice
+          : {},
     };
   } catch {
     return base;
@@ -110,12 +123,46 @@ const read = () => {
   return state;
 };
 
+/**
+ * Progressively shed the largest data first when the browser refuses a write.
+ * Losing old trial detail is always better than losing the whole store, which
+ * is what an unhandled QuotaExceededError amounts to.
+ */
+const SHED_STEPS = [
+  (s) => ({ ...s, lastScan: s.lastScan ? { ...s.lastScan, rawScores: null } : null }),
+  (s) => ({ ...s, sessions: s.sessions.slice(-60) }),
+  (s) => ({
+    ...s,
+    sessions: s.sessions.slice(-20).map(({ metrics: _drop, ...rest }) => rest),
+  }),
+  (s) => ({ ...s, sessions: s.sessions.slice(-5), lastScan: null }),
+];
+
+let quotaWarned = false;
+
 const persist = () => {
   if (!isBrowser()) return;
   try {
     window.localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    return;
   } catch (error) {
-    // Quota or private-mode failure. The session still works in memory.
+    // Private mode, a full disk, or genuine quota exhaustion. Try to keep the
+    // most valuable data (profile, streak, XP, achievements, plan) alive by
+    // dropping bulk history rather than failing the write entirely.
+    for (const shed of SHED_STEPS) {
+      try {
+        const reduced = shed(state);
+        window.localStorage.setItem(STORE_KEY, JSON.stringify(reduced));
+        state = reduced;
+        if (!quotaWarned) {
+          quotaWarned = true;
+          console.warn("DefogDaily: storage full — older scan history was trimmed to make room.");
+        }
+        return;
+      } catch {
+        // Try the next, more aggressive step.
+      }
+    }
     console.warn("DefogDaily: could not persist local store", error);
   }
 };
@@ -123,6 +170,32 @@ const persist = () => {
 const emit = () => {
   for (const listener of listeners) listener();
 };
+
+/**
+ * Adopt what another tab wrote.
+ *
+ * Without this, two open tabs each hold their own cached `state` and every
+ * write is a full overwrite, so whichever tab saves last silently erases the
+ * other's session. Re-hydrating on the `storage` event (which only fires in
+ * *other* tabs) keeps each tab's cache fresh, so the next write in this tab
+ * builds on the newest data instead of stale data.
+ *
+ * Note this deliberately assigns a NEW object: useSyncExternalStore detects
+ * change by identity, so a fresh reference is what makes React re-render. The
+ * stability requirement is that repeated `read()` calls with no intervening
+ * write return the same reference, which they still do.
+ */
+const syncFromStorage = () => {
+  if (!isBrowser()) return;
+  state = hydrate(window.localStorage.getItem(STORE_KEY));
+  emit();
+};
+
+if (isBrowser()) {
+  window.addEventListener("storage", (event) => {
+    if (event.key === STORE_KEY) syncFromStorage();
+  });
+}
 
 /** Apply a pure updater to the store, persist, and notify subscribers. */
 export const update = (updater) => {
@@ -206,23 +279,48 @@ export const daysSinceLastSession = (streak, now = Date.now()) => {
   return daysBetween(streak.lastDay, dayKey(now));
 };
 
+/**
+ * The streak as it stands *right now*.
+ *
+ * `streak.current` is only recalculated when a session is recorded, so a stored
+ * value of 12 keeps rendering as "12 day streak" months after the streak was
+ * actually broken. Anything user-facing must read through this instead: a
+ * streak survives today and yesterday, and is zero beyond that.
+ */
+export const liveStreak = (streak, now = Date.now()) => {
+  if (!streak?.lastDay) return 0;
+  const gap = daysBetween(streak.lastDay, dayKey(now));
+  return gap <= 1 ? streak.current : 0;
+};
+
 /* ------------------------------------------------------------------ *
  * XP & levels
  * ------------------------------------------------------------------ */
 
+const MAX_LEVEL = 99;
+
 /** Levels widen as you climb: level N needs 120 * N^1.35 cumulative XP. */
 export const levelForXp = (total) => {
+  const safeTotal = Number.isFinite(total) && total > 0 ? total : 0;
   let level = 1;
-  while (level < 99 && total >= xpForLevel(level + 1)) level += 1;
+  while (level < MAX_LEVEL && safeTotal >= xpForLevel(level + 1)) level += 1;
+
+  const isMax = level >= MAX_LEVEL;
   const floor = xpForLevel(level);
   const ceiling = xpForLevel(level + 1);
+  const span = Math.max(1, ceiling - floor);
+
   return {
     level,
+    isMax,
     floor,
     ceiling,
-    into: total - floor,
-    needed: ceiling - floor,
-    progress: Math.min(1, (total - floor) / Math.max(1, ceiling - floor)),
+    // Past the cap, XP keeps accruing with nowhere to go. Clamping keeps the
+    // meter full and stops "XP to level 100" rendering as a negative number.
+    into: isMax ? span : safeTotal - floor,
+    needed: span,
+    remaining: isMax ? 0 : Math.max(0, ceiling - safeTotal),
+    progress: isMax ? 1 : Math.min(1, Math.max(0, (safeTotal - floor) / span)),
   };
 };
 
@@ -243,11 +341,39 @@ export const recordSession = (session) => {
   let nextStreak = null;
 
   update((s) => {
+    const isDrillRun = (session.kind ?? "scan") === "drill";
+
+    /**
+     * Only a standardised scan may move your measured profile.
+     *
+     * Practice drills adapt their difficulty to you, which is exactly right for
+     * training and exactly wrong for measurement: a 4-back drill and a 2-back
+     * scan produce scores that are not on the same scale, so letting drills
+     * write here silently corrupted percentiles, personal bests and the
+     * training plan's choice of target. Drill effort is tracked separately so
+     * it is still visible without contaminating the measurement.
+     */
     let profile = s.profile;
+    let practice = s.practice ?? {};
+
     for (const key of session.domains ?? []) {
       const score = session.scores?.[key];
       if (typeof score !== "number" || Number.isNaN(score)) continue;
-      profile = applyDomainResult(profile, key, score, at);
+
+      if (isDrillRun) {
+        const slot = practice[key] ?? { reps: 0, best: 0, last: null, history: [] };
+        practice = {
+          ...practice,
+          [key]: {
+            reps: slot.reps + 1,
+            best: Math.max(slot.best, score),
+            last: score,
+            history: [...slot.history, { t: at, s: score }].slice(-60),
+          },
+        };
+      } else {
+        profile = applyDomainResult(profile, key, score, at);
+      }
     }
 
     // XP rewards effort and quality: base per domain plus a performance bonus.
@@ -255,7 +381,7 @@ export const recordSession = (session) => {
     const avg = session.composite ?? 0;
     xpGained = Math.round(domainCount * 18 + avg * 0.9 + (session.mode === "deep" ? 60 : 0));
 
-    nextStreak = session.kind === "drill" ? s.streak : advanceStreak(s.streak, at);
+    nextStreak = isDrillRun ? s.streak : advanceStreak(s.streak, at);
 
     const record = {
       id: `${at}-${Math.round(avg)}`,
@@ -269,24 +395,39 @@ export const recordSession = (session) => {
       durationMs: session.durationMs ?? null,
     };
 
+    /**
+     * `lastScan` is what the Report tab rebuilds itself from after a reload,
+     * so only a real multi-domain scan may claim that slot. Letting a
+     * single-domain practice drill overwrite it silently destroyed the user's
+     * whole profile: an 8-domain Deep Scan report would collapse to one
+     * domain, taking the composite index, cognitive age and training plan
+     * targets down with it. An empty run (everything skipped) must not claim
+     * it either — `{}` is truthy.
+     */
+    const isDrill = (session.kind ?? "scan") === "drill";
+    const hasTelemetry =
+      !!session.rawScores && Object.keys(session.rawScores).length > 0;
+
     return {
       ...s,
       profile,
+      practice,
       sessions: [...s.sessions, record].slice(-200),
+      // sessions[] is capped for quota reasons, so its length stops being a
+      // truthful lifetime count after 200 runs. Track that separately.
+      totalSessions: (s.totalSessions ?? s.sessions.length) + 1,
       streak: nextStreak,
       xp: { total: s.xp.total + xpGained },
-      // Keep the most recent run's raw telemetry so the deep report can be
-      // rebuilt after a reload. Only one scan's worth — trial arrays are large
-      // and 200 of them would blow the localStorage quota.
-      lastScan: session.rawScores
-        ? {
-            rawScores: session.rawScores,
-            scores: session.scores,
-            at,
-            mode: session.mode ?? "practice",
-            domains: session.domains ?? [],
-          }
-        : s.lastScan ?? null,
+      lastScan:
+        !isDrill && hasTelemetry
+          ? {
+              rawScores: session.rawScores,
+              scores: session.scores,
+              at,
+              mode: session.mode ?? "practice",
+              domains: session.domains ?? [],
+            }
+          : s.lastScan ?? null,
     };
   });
 

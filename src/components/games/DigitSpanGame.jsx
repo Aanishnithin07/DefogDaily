@@ -168,6 +168,15 @@ export default function DigitSpanGame({ onComplete, drillConfig = null }) {
 
       // Failed twice at this length — this direction is done.
       if (exhausted && !passed) {
+        /**
+         * Record the floor rather than leaving the span at 0. Failing both
+         * opening trials — one mistyped digit is enough — used to report
+         * forwardSpan 0, which is not a measurement anyone can produce: it
+         * means "below the shortest length we tested", not "no capacity". A
+         * literal 0 dragged the combined span score to the floor and made the
+         * report accuse a merely distracted user of a severe deficit.
+         */
+        spanRef.current = Math.max(spanRef.current, currentLength - 1);
         attemptAtLengthRef.current = 0;
         correctAtLengthRef.current = 0;
         if (currentDirection === "forward" && !onlyDirection) {
@@ -372,7 +381,7 @@ export default function DigitSpanGame({ onComplete, drillConfig = null }) {
               type="button"
               onClick={() => pressDigit(digit)}
               disabled={isFull}
-              className="min-h-12 rounded-xl-soft border border-white/[0.09] bg-white/[0.03] font-mono text-xl text-text-primary transition-colors hover:bg-white/[0.08] active:bg-white/[0.12] disabled:opacity-35 focus-visible:outline-none"
+              className="min-h-12 rounded-xl-soft border border-white/[0.09] bg-white/[0.03] font-mono text-xl text-text-primary transition-colors hover:bg-white/[0.08] active:bg-white/[0.12] disabled:opacity-35"
             >
               {digit}
             </button>
@@ -382,7 +391,7 @@ export default function DigitSpanGame({ onComplete, drillConfig = null }) {
             onClick={backspace}
             disabled={entry.length === 0}
             aria-label="Delete last digit"
-            className="grid min-h-12 place-items-center rounded-xl-soft border border-white/[0.09] bg-white/[0.03] text-text-secondary transition-colors hover:bg-white/[0.08] disabled:opacity-35 focus-visible:outline-none"
+            className="grid min-h-12 place-items-center rounded-xl-soft border border-white/[0.09] bg-white/[0.03] text-text-secondary transition-colors hover:bg-white/[0.08] disabled:opacity-35"
           >
             <Delete className="h-4 w-4" />
           </button>
@@ -390,7 +399,7 @@ export default function DigitSpanGame({ onComplete, drillConfig = null }) {
             type="button"
             onClick={() => pressDigit(0)}
             disabled={isFull}
-            className="min-h-12 rounded-xl-soft border border-white/[0.09] bg-white/[0.03] font-mono text-xl text-text-primary transition-colors hover:bg-white/[0.08] disabled:opacity-35 focus-visible:outline-none"
+            className="min-h-12 rounded-xl-soft border border-white/[0.09] bg-white/[0.03] font-mono text-xl text-text-primary transition-colors hover:bg-white/[0.08] disabled:opacity-35"
           >
             0
           </button>

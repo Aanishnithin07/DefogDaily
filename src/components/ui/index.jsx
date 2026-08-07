@@ -197,7 +197,7 @@ export const Button = forwardRef(function Button(
         if (sound) cue(sound);
         onClick?.(event);
       }}
-      className={`inline-flex items-center justify-center gap-2 transition-colors duration-200 ease-defog touch-none-safe disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none ${BUTTON_SIZES[size]} ${BUTTON_VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 transition-colors duration-200 ease-defog touch-none-safe disabled:cursor-not-allowed disabled:opacity-45 ${BUTTON_SIZES[size]} ${BUTTON_VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
@@ -218,7 +218,7 @@ export function IconButton({ icon: Icon, label, onClick, active = false, classNa
         cue("tap");
         onClick?.(event);
       }}
-      className={`grid h-10 w-10 place-items-center rounded-xl-soft border transition-colors duration-200 focus-visible:outline-none ${
+      className={`grid h-10 w-10 place-items-center rounded-xl-soft border transition-colors duration-200 ${
         active
           ? "border-accent-cyan/45 bg-accent-cyan/10 text-accent-cyan"
           : "border-white/10 bg-white/[0.03] text-text-secondary hover:bg-white/[0.08] hover:text-text-primary"
@@ -429,28 +429,49 @@ export function StepDots({ total, current, className = "" }) {
  * ------------------------------------------------------------------ */
 
 export function Toast({ message, onDone, duration = 2800, icon: Icon }) {
+  // Hold onDone in a ref so a new callback identity on the parent's next render
+  // cannot restart the dismiss timer, which previously left a toast pinned on
+  // screen for as long as the user kept interacting with the page.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  });
+
   useEffect(() => {
     if (!message) return undefined;
-    const timer = window.setTimeout(() => onDone?.(), duration);
+    const timer = window.setTimeout(() => onDoneRef.current?.(), duration);
     return () => window.clearTimeout(timer);
-  }, [message, duration, onDone]);
+  }, [message, duration]);
 
   return (
-    <AnimatePresence>
-      {message && (
-        <motion.div
-          initial={{ opacity: 0, y: 24, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 12, scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 380, damping: 30 }}
-          role="status"
-          className="pointer-events-none fixed inset-x-0 bottom-24 z-50 mx-auto flex w-fit max-w-[90vw] items-center gap-2 rounded-2xl-soft border border-white/12 bg-bg-raised/95 px-4 py-3 text-sm text-text-primary shadow-lift-lg backdrop-blur-xl md:bottom-10"
-        >
-          {Icon && <Icon className="h-4 w-4 shrink-0 text-accent-cyan" aria-hidden="true" />}
-          <span>{message}</span>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <>
+      {/**
+       * The live region is always mounted and starts empty. A `role="status"`
+       * node that is inserted into the DOM already containing its text is not
+       * announced by screen readers — the text has to *change* inside a region
+       * that was already being observed. The visual toast is separate and
+       * aria-hidden so nothing is read twice.
+       */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {message ?? ""}
+      </div>
+
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            aria-hidden="true"
+            className="pointer-events-none fixed inset-x-0 bottom-24 z-50 mx-auto flex w-fit max-w-[90vw] items-center gap-2 rounded-2xl-soft border border-white/12 bg-bg-raised/95 px-4 py-3 text-sm text-text-primary shadow-lift-lg backdrop-blur-xl md:bottom-10"
+          >
+            {Icon && <Icon className="h-4 w-4 shrink-0 text-accent-cyan" aria-hidden="true" />}
+            <span>{message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -500,7 +521,7 @@ export function Disclosure({ summary, children, defaultOpen = false, accent = "s
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="no-print flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none"
+        className="no-print flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
       >
         <span className={`text-sm font-medium ${open ? a.text : "text-text-secondary"}`}>{summary}</span>
         <motion.span

@@ -13,23 +13,28 @@
     <meta property="og:url" content="https://defogdaily.com/" />
     <meta property="og:title" content="DefogDaily | Find out exactly where your mind is weak" />
     <meta property="og:description" content="8 cognitive domains measured trial by trial. A real diagnostic report, and a 28-day protocol to fix your weakest one. Free, forever, no signup." />
-    <meta property="og:image" content="https://defogdaily.com/og-image.jpg" />
+    <meta property="og:image" content="https://defogdaily.com/og-image.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="DefogDaily | Find out exactly where your mind is weak" />
     <meta name="twitter:description" content="8 cognitive domains measured trial by trial. A real diagnostic report, and a 28-day protocol to fix your weakest one. Free, forever, no signup." />
-    <meta name="twitter:image" content="https://defogdaily.com/og-image.jpg" />
+    <meta name="twitter:image" content="https://defogdaily.com/og-image.png" />
 
     <!-- PWA touches -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0B0E14" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <!-- iOS ignores SVG for the home-screen icon and would fall back to a
+         screenshot, so a real PNG is required here. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DefogDaily" />
 
-    <!-- Google Fonts as per design system -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <!--
+      Fonts are self-hosted via @fontsource and imported from src/index.css, so
+      no request leaves this origin and nothing here blocks first paint.
+    -->
   </head>
   <body class="bg-bg-base text-text-primary antialiased"> 
     <div id="root">

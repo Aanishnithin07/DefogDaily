@@ -21,29 +21,63 @@ export function xmur3(str) {
   }
 }
 
-let currentPRNG = null;
 let currentMode = "practice";
+let dailySeedString = null;
+const streams = new Map();
+let activeStream = null;
+
+/**
+ * Build the calendar-day seed.
+ *
+ * Zero-padded so 2026-1-2 and 2026-12-0... cannot collide, and taken from the
+ * user's local calendar date deliberately: "today's puzzle" should match the
+ * day you are actually living in, not UTC.
+ */
+const todaySeedString = (now = new Date()) =>
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate()
+  ).padStart(2, "0")}`;
 
 export function initializeRandomizer(mode) {
   currentMode = mode;
-  if (mode === "daily") {
-    // Generate a seed based on the current local date (YYYY-MM-DD)
-    const today = new Date();
-    const dateString = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-    const seed = xmur3(dateString)();
-    currentPRNG = mulberry32(seed);
-  } else {
-    currentPRNG = null; // Fallback to Math.random
-  }
+  streams.clear();
+  activeStream = null;
+  dailySeedString = mode === "daily" ? todaySeedString() : null;
 }
 
-// Drop-in replacement for Math.random()
-export function getRandom() {
-  if (currentMode === "daily" && currentPRNG) {
-    return currentPRNG();
+/**
+ * Select the stream a game will draw from.
+ *
+ * Daily mode previously ran every game off ONE sequential stream, so how many
+ * trials you answered in game 1 decided which words and patterns you got in
+ * games 2-4. Two people doing the same "daily challenge" therefore faced
+ * different puzzles, which is precisely what a shared daily seed is supposed to
+ * prevent. Each game now draws from its own stream, seeded from the date plus
+ * the game's name, so a game's sequence depends only on the calendar day.
+ *
+ * @param {string} name domain key, e.g. "speed"
+ * @param {number} attempt bumped on a redo so a repeat is not identical
+ */
+export function selectStream(name, attempt = 0) {
+  if (currentMode !== "daily" || !dailySeedString) {
+    activeStream = null;
+    return;
   }
+  const key = `${name}#${attempt}`;
+  if (!streams.has(key)) {
+    streams.set(key, mulberry32(xmur3(`${dailySeedString}:${key}`)()));
+  }
+  activeStream = streams.get(key);
+}
+
+/** Drop-in replacement for Math.random(). */
+export function getRandom() {
+  if (currentMode === "daily" && activeStream) return activeStream();
   return Math.random();
 }
+
+/** Exposed for tests and for showing the user which day's puzzle they are on. */
+export const currentDailySeed = () => dailySeedString;
 
 // Utility to shuffle an array using the current randomizer
 export function shuffleArray(array) {

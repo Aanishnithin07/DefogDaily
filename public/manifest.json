@@ -17,9 +17,15 @@
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -28,13 +34,19 @@
       "name": "Daily Scan",
       "short_name": "Scan",
       "description": "Run today's three-minute cognitive scan",
-      "url": "/?action=daily"
+      "url": "/#/scan?mode=daily"
     },
     {
       "name": "Practise",
       "short_name": "Practise",
       "description": "Drill your weakest domain",
-      "url": "/?action=practice"
+      "url": "/#/practice"
+    },
+    {
+      "name": "My report",
+      "short_name": "Report",
+      "description": "Open your latest cognitive report",
+      "url": "/#/report"
     }
   ]
 }

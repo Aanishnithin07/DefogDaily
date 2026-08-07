@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BarChart3, Dumbbell, FileText, Home, Target } from "lucide-react";
 import Landing from "./Landing";
@@ -16,6 +16,7 @@ import { buildReport } from "./lib/report";
 import { extractMetrics } from "./lib/metrics";
 import { newlyEarned } from "./lib/achievements";
 import { getState, markPlanTask, recordSession, unlockAchievements, useStore } from "./lib/storage";
+import { useRoute } from "./lib/router";
 import { saveScore } from "./lib/firestore";
 import { primeAudio } from "./lib/feedback";
 
@@ -77,7 +78,7 @@ function TabBar({ view, onNavigate, visible }) {
               type="button"
               onClick={() => onNavigate(key)}
               aria-current={active ? "page" : undefined}
-              className="relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-2 focus-visible:outline-none"
+              className="relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-2"
             >
               {active && (
                 <motion.span
@@ -125,7 +126,7 @@ function SideRail({ view, onNavigate, visible }) {
             onClick={() => onNavigate(key)}
             aria-current={active ? "page" : undefined}
             title={label}
-            className={`group relative grid h-11 w-11 place-items-center rounded-xl-soft transition-colors focus-visible:outline-none ${
+            className={`group relative grid h-11 w-11 place-items-center rounded-xl-soft transition-colors ${
               active
                 ? "bg-accent-cyan/12 text-accent-cyan"
                 : "text-text-tertiary hover:bg-white/[0.06] hover:text-text-primary"
@@ -143,18 +144,22 @@ function SideRail({ view, onNavigate, visible }) {
 }
 
 function AppInner() {
-  const [view, setView] = useState("landing");
-  const [scanConfig, setScanConfig] = useState({ mode: "daily", domains: null, planTask: null });
+  const [scanConfig, setScanConfig] = useState({
+    mode: "daily",
+    domains: null,
+    planTask: null,
+    started: false,
+  });
   const [result, setResult] = useState(null);
   const [sessionMeta, setSessionMeta] = useState(null);
   const { currentUser } = useAuth();
 
   const lastScan = useStore((s) => s.lastScan);
   const plan = useStore((s) => s.plan);
+  const shortcutsEnabled = useStore((s) => s.prefs.shortcuts);
+  const mainRef = useRef(null);
 
-  /** Live report: the run just finished, or the last one rebuilt from storage. */
-  const report = useMemo(() => {
-    const source = result ?? lastScan;
+  const buildSafely = useCallback((source) => {
     if (!source?.rawScores) return null;
     try {
       return buildReport(source.rawScores, source.scores);
@@ -162,26 +167,101 @@ function AppInner() {
       console.error("Report build failed", error);
       return null;
     }
-  }, [result, lastScan]);
-
-  const navigate = useCallback((next) => {
-    primeAudio();
-    setView(next);
-    window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
 
-  const startScan = useCallback((mode = "daily") => {
-    setScanConfig({ mode, domains: null, planTask: null });
+  /**
+   * Two different reports, deliberately.
+   *
+   * `report` is your cognitive profile and must only ever be built from a real
+   * multi-domain scan. Before this split, finishing a single-domain practice
+   * drill rebuilt it from that one domain, collapsing an 8-domain Deep Scan to
+   * "Domains 1/8" and dragging the composite index, cognitive age and training
+   * targets down with it.
+   *
+   * `runReport` describes the run you just finished — which may legitimately be
+   * a one-domain drill — and is only used by the results screen.
+   */
+  const report = useMemo(() => {
+    const source = result && !result.isDrill ? result : lastScan;
+    return buildSafely(source);
+  }, [result, lastScan, buildSafely]);
+
+  const runReport = useMemo(
+    () => (result?.isDrill ? buildSafely(result) : report),
+    [result, report, buildSafely]
+  );
+
+  /**
+   * Routes are guarded rather than merely hidden: someone can paste
+   * #/results into a cold tab, and there is no in-memory run to show them.
+   * Anything unreachable falls back to the nearest screen that has real data.
+   */
+  const resolveRoute = useCallback(
+    (requested, routeParams) => {
+      // The PWA "Daily Scan" shortcut opens #/scan?mode=daily on a cold start,
+      // so a scan route carrying an explicit mode is allowed to launch one.
+      if (requested === "scan" && !scanConfig.started && !SCAN_MODES[routeParams?.mode])
+        return "landing";
+      if (requested === "results" && !result) return report ? "report" : "landing";
+      return requested;
+    },
+    [report, result, scanConfig.started]
+  );
+
+  const { view, params, navigate: routeTo } = useRoute(resolveRoute);
+
+  const navigate = useCallback(
+    (next, options) => {
+      primeAudio();
+      routeTo(next, options);
+    },
+    [routeTo]
+  );
+
+  // Scroll to top on every view change, including browser back/forward.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [view]);
+
+  // Honour a launcher shortcut that deep-links straight into a scan.
+  useEffect(() => {
+    if (view !== "scan" || scanConfig.started) return;
+    const mode = params?.mode;
+    if (!SCAN_MODES[mode]) return;
+    setScanConfig({ mode, domains: null, planTask: null, started: true });
     setResult(null);
-    navigate("scan");
-  }, [navigate]);
+  }, [view, params, scanConfig.started]);
+
+  const startScan = useCallback(
+    (mode = "daily", planTask = null) => {
+      setScanConfig({
+        mode,
+        domains: null,
+        // Guard against a malformed task so markPlanTask is never called with
+        // an undefined id.
+        planTask: planTask?.taskId != null ? planTask : null,
+        started: true,
+      });
+      setResult(null);
+      navigate("scan");
+    },
+    [navigate]
+  );
 
   const startDrill = useCallback(
     (domainKey, planTask = null) => {
       if (!DOMAINS[domainKey]) return;
-      setScanConfig({ mode: "practice", domains: [domainKey], planTask });
+      setScanConfig({ mode: "practice", domains: [domainKey], planTask, started: true });
       setResult(null);
       navigate("scan");
+    },
+    [navigate]
+  );
+
+  const exitScan = useCallback(
+    (to = "landing") => {
+      setScanConfig((c) => ({ ...c, started: false }));
+      navigate(to);
     },
     [navigate]
   );
@@ -219,33 +299,73 @@ function AppInner() {
         saveScore(currentUser.uid, metrics, finished.scores).catch(() => {});
       }
 
-      setResult(finished);
+      setResult({ ...finished, isDrill });
+      setScanConfig((c) => ({ ...c, started: false }));
       setSessionMeta({
         xpGained,
         streak,
         newAchievements: fresh,
+        // A drill launched from the protocol should hand you back to the
+        // protocol, not strand you on a results page with no way back to it.
+        returnTo: scanConfig.planTask ? "train" : null,
         modeLabel: isDrill
           ? `${DOMAINS[finished.domains[0]].label} drill`
           : SCAN_MODES[finished.mode]?.label ?? "Scan complete",
       });
-      navigate("results");
+      // Navigation happens in the effect below, once `result` has actually
+      // committed. Routing here would race the guard in resolveRoute, which
+      // still sees result === null and bounces straight back to the landing
+      // page — losing the run the user just spent minutes on.
     },
-    [currentUser, navigate, scanConfig.domains, scanConfig.planTask]
+    [currentUser, scanConfig.domains, scanConfig.planTask]
   );
 
-  // Keyboard shortcuts for the impatient — 1-5 jump between sections.
   useEffect(() => {
+    if (!result) return;
+    navigate("results", { replace: true });
+    // Only when a new run lands; navigating away afterwards must not re-fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
+  /**
+   * Single-character shortcuts (1-5) jump between sections.
+   *
+   * WCAG 2.1.4 requires single-key shortcuts to be switchable, so this honours
+   * a preference — anyone using speech input, where stray characters fire
+   * shortcuts constantly, can turn them off in Settings.
+   */
+  useEffect(() => {
+    if (shortcutsEnabled === false) return undefined;
     const onKey = (event) => {
       if (view === "scan") return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target;
-      if (target instanceof HTMLElement && /input|textarea|select/i.test(target.tagName)) return;
+      // Never hijack a keystroke meant for a field — the age input and the
+      // digit-span keypad both take numbers.
+      if (
+        target instanceof HTMLElement &&
+        (/input|textarea|select/i.test(target.tagName) || target.isContentEditable)
+      ) {
+        return;
+      }
       const index = Number(event.key) - 1;
       if (index >= 0 && index < TABS.length) navigate(TABS[index].key);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, view]);
+  }, [navigate, view, shortcutsEnabled]);
+
+  /**
+   * Move focus to the new screen on every view change.
+   *
+   * Without this a keyboard or screen-reader user stays parked on the nav
+   * button they just pressed while the entire page content changes silently
+   * behind them, and the next Tab resumes from the nav rather than the content.
+   */
+  useEffect(() => {
+    if (view === "scan") return;
+    mainRef.current?.focus({ preventScroll: true });
+  }, [view]);
 
   const chromeVisible = view !== "scan" && view !== "results";
   const auroraTone =
@@ -258,18 +378,20 @@ function AppInner() {
         mode={scanConfig.mode}
         domains={scanConfig.domains}
         onFinish={handleFinish}
-        onExit={() => navigate("landing")}
+        onExit={() => exitScan(scanConfig.planTask ? "train" : "landing")}
+        // Every game was skipped or interrupted, so there is nothing to save.
+        onAbandon={() => exitScan(scanConfig.planTask ? "train" : "landing")}
       />
     ),
     results: (
       <ResultsDashboard
-        report={report}
+        report={runReport}
         result={result}
         sessionMeta={sessionMeta}
         onViewReport={() => navigate("report")}
         onStartPlan={() => navigate("train")}
         onRescan={() => startScan(scanConfig.mode)}
-        onHome={() => navigate("landing")}
+        onHome={() => navigate(sessionMeta?.returnTo ?? "landing")}
       />
     ),
     report: (
@@ -291,7 +413,15 @@ function AppInner() {
       />
     ),
     practice: <PracticeScreen onBack={() => navigate("landing")} onStartDrill={startDrill} />,
-    progress: <ProgressScreen onBack={() => navigate("landing")} />,
+    progress: (
+      <ProgressScreen
+        onBack={() => navigate("landing")}
+        onDataCleared={() => {
+          setResult(null);
+          setSessionMeta(null);
+        }}
+      />
+    ),
   };
 
   const activeScreen = screens[view] ?? screens.landing;
@@ -299,7 +429,18 @@ function AppInner() {
   return (
     <>
       <Aurora tone={auroraTone} />
-      <div className="min-h-screen font-body text-text-primary md:pl-16">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl-soft focus:bg-accent-cyan focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-bg-void"
+      >
+        Skip to content
+      </a>
+      <main
+        id="main"
+        ref={mainRef}
+        tabIndex={-1}
+        className="min-h-screen font-body text-text-primary outline-none md:pl-16"
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={view}
@@ -311,7 +452,7 @@ function AppInner() {
             {activeScreen}
           </motion.div>
         </AnimatePresence>
-      </div>
+      </main>
       <TabBar view={view} onNavigate={navigate} visible={chromeVisible} />
       <SideRail view={view} onNavigate={navigate} visible={chromeVisible} />
     </>

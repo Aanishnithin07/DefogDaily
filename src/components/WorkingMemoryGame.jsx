@@ -268,10 +268,10 @@ export default function WorkingMemoryGame({ onComplete }) {
                       whileTap={{ scale: 0.96 }}
                       animate={selected ? { scale: 1.02 } : { scale: 1 }}
                       transition={springTap}
-                      className={`min-h-12 rounded-2xl-soft border px-3 py-3 text-center font-display text-base transition focus-visible:outline-none focus-visible:ring-2 ${
+                      className={`min-h-12 rounded-2xl-soft border px-3 py-3 text-center font-display text-base transition ${
                         selected
-                          ? "border-accent-cyan bg-accent-cyan/15 text-text-primary shadow-glow-cyan focus-visible:ring-accent-cyan"
-                          : "border-white/10 bg-white/5 text-text-primary hover:bg-white/10 focus-visible:ring-accent-violet"
+                          ? "border-accent-cyan bg-accent-cyan/15 text-text-primary shadow-glow-cyan"
+                          : "border-white/10 bg-white/5 text-text-primary hover:bg-white/10"
                       }`}
                     >
                       {word}
@@ -287,7 +287,7 @@ export default function WorkingMemoryGame({ onComplete }) {
                   whileTap={{ scale: 0.98 }}
                   transition={springTap}
                   disabled={selectionCount === 0}
-                  className="min-h-11 rounded-2xl-soft bg-accent-cyan px-6 py-3 font-medium text-bg-base shadow-glow-cyan disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+                  className="min-h-11 rounded-2xl-soft bg-accent-cyan px-6 py-3 font-medium text-bg-base shadow-glow-cyan disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Submit
                 </motion.button>

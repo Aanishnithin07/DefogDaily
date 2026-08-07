@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { lazy, useEffect, useMemo, useState } from "react";
+import ChartBoundary from "../components/ChartBoundary";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -349,6 +350,8 @@ function FindingCard({ finding, onPractice }) {
   );
 }
 
+const NO_DOMAINS = [];
+
 const SECTIONS = [
   { id: "report-overview", label: "Overview" },
   { id: "report-systems", label: "Systems" },
@@ -393,7 +396,7 @@ function SectionNav() {
               document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
             aria-current={active === id ? "true" : undefined}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-2xs uppercase tracking-wider transition-colors focus-visible:outline-none ${
+            className={`shrink-0 rounded-full px-3 py-1.5 text-2xs uppercase tracking-wider transition-colors ${
               active === id
                 ? "bg-accent-cyan/12 text-accent-cyan"
                 : "text-text-tertiary hover:text-text-secondary"
@@ -410,17 +413,24 @@ function SectionNav() {
 export default function ReportScreen({ report, onBack, onStartPlan, onPractice, onStartScan, hasPlan }) {
   const profile = useStore((s) => s.profile);
 
+  // Hooks must run before any early return, and this component is legitimately
+  // rendered with no report at all (the Report tab is reachable before a first
+  // scan). Every derivation below therefore has to tolerate report === null.
+  // NO_DOMAINS is module-level so the fallback keeps a stable identity and does
+  // not invalidate the memo on every render.
+  const domains = report?.domains ?? NO_DOMAINS;
+
   const radarData = useMemo(
     () =>
-      report.domains.map((d) => ({
+      domains.map((d) => ({
         label: d.short,
         value: d.score,
         baseline: Math.round(profile[d.key]?.ema ?? d.score),
       })),
-    [report.domains, profile]
+    [domains, profile]
   );
 
-  const hasBaseline = report.domains.some((d) => (profile[d.key]?.sessions ?? 0) > 1);
+  const hasBaseline = domains.some((d) => (profile[d.key]?.sessions ?? 0) > 1);
 
   if (!report?.index) {
     return (
@@ -450,7 +460,7 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary focus-visible:outline-none"
+          className="flex items-center gap-1.5 text-sm text-text-tertiary transition-colors hover:text-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -485,9 +495,9 @@ export default function ReportScreen({ report, onBack, onStartPlan, onPractice, 
               ) : null
             }
           />
-          <Suspense fallback={<div className="skeleton h-[300px] w-full rounded-3xl-soft" />}>
+          <ChartBoundary height={300} label="chart">
             <DomainRadar data={radarData} showBaseline={hasBaseline} height={300} />
-          </Suspense>
+          </ChartBoundary>
         </Card>
       </motion.div>
 

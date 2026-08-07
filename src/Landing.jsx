@@ -20,7 +20,7 @@ import {
 import { DEEP_SCAN, DOMAINS, PILLARS } from "./lib/domains";
 import { defogReveal, fadeInUp, staggerContainer, useReducedMotionVariant } from "./lib/motion";
 import { trackEvent } from "./lib/analytics";
-import { levelForXp, useStore } from "./lib/storage";
+import { levelForXp, liveStreak, useStore } from "./lib/storage";
 import { Button, Card, Pill, SectionTitle, accentOf } from "./components/ui";
 import { iconFor } from "./components/ui/icons";
 
@@ -75,8 +75,9 @@ export default function Landing({ onStartScan, onNavigate }) {
   const up = useReducedMotionVariant(prefersReducedMotion, fadeInUp);
   const stagger = useMemo(() => staggerContainer(0.08, 0.14), []);
 
-  const hasHistory = state.sessions.length > 0;
+  const hasHistory = (state.totalSessions ?? state.sessions.length) > 0;
   const level = levelForXp(state.xp.total);
+  const streak = liveStreak(state.streak);
 
   const start = (mode) => {
     trackEvent("cta_clicked", { mode });
@@ -98,10 +99,10 @@ export default function Landing({ onStartScan, onNavigate }) {
               <button
                 type="button"
                 onClick={() => onNavigate("progress")}
-                className="hidden items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-2xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none sm:flex"
+                className="hidden items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-2xs text-text-secondary transition-colors hover:text-text-primary sm:flex"
               >
                 <Flame className="h-3 w-3 text-accent-amber" />
-                {state.streak.current} day · Lv {level.level}
+                {streak} day · Lv {level.level}
               </button>
             )}
             <Button variant="primary" size="sm" onClick={() => start("daily")}>
@@ -111,7 +112,7 @@ export default function Landing({ onStartScan, onNavigate }) {
         </div>
       </motion.nav>
 
-      <main>
+      <div>
         {/* Hero */}
         <section className="relative px-4 pb-16 pt-12 md:px-6 md:pb-24 md:pt-20">
           <div className="mx-auto max-w-5xl">
@@ -164,7 +165,7 @@ export default function Landing({ onStartScan, onNavigate }) {
                   variants={up}
                   type="button"
                   onClick={() => onNavigate(state.plan ? "train" : "progress")}
-                  className="mt-6 flex items-center gap-2 text-sm text-accent-cyan transition-opacity hover:opacity-80 focus-visible:outline-none"
+                  className="mt-6 flex items-center gap-2 text-sm text-accent-cyan transition-opacity hover:opacity-80"
                 >
                   {state.plan ? "Continue your 28-day protocol" : "See your progress"}
                   <ChevronRight className="h-4 w-4" />
@@ -390,7 +391,7 @@ export default function Landing({ onStartScan, onNavigate }) {
             </Card>
           </div>
         </section>
-      </main>
+      </div>
 
       <footer className="border-t border-white/[0.06] px-4 py-10 md:px-6">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 text-center">

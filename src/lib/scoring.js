@@ -12,13 +12,18 @@ const clamp = (value, min = 0, max = 100) => Math.max(min, Math.min(max, value))
 
 /** Games historically emitted accuracy as either 0-1 or 0-100. Normalize both. */
 const toPercent = (value) => {
-  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  if (!Number.isFinite(value)) return 0;
   return value <= 1.0001 ? value * 100 : value;
 };
 
-/** Linear reaction-time bonus: `fast` ms scores 100, `slow` ms scores 0. */
+/**
+ * Linear reaction-time bonus: `fast` ms scores 100, `slow` ms scores 0.
+ * Guards on isFinite, not `<= 0` — NaN fails every comparison, so a NaN
+ * reaction time slipped through and propagated NaN into the domain score and
+ * from there into the composite index.
+ */
 const reactionBonus = (ms, fast, slow) => {
-  if (typeof ms !== "number" || ms <= 0) return 0;
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
   const clamped = Math.max(fast, Math.min(slow, ms));
   return 100 - ((clamped - fast) / (slow - fast)) * 100;
 };
@@ -41,7 +46,10 @@ const scorers = {
 
   // Corsi-style span. Level 12 (span 15) is a ceiling almost nobody reaches.
   spatial: (payload) => {
-    const level = payload.levelReached ?? payload.raw?.levelReached ?? 1;
+    const raw = payload.levelReached ?? payload.raw?.levelReached ?? 1;
+    // Clamp before the fractional exponent: Math.pow of a negative base with a
+    // fractional power is NaN, so a corrupt negative level poisoned the score.
+    const level = Number.isFinite(raw) ? Math.max(0, raw) : 0;
     // Non-linear: early levels are cheap, later levels are worth much more.
     return clamp(Math.pow(level / 12, 0.78) * 100);
   },
@@ -113,7 +121,11 @@ export function normalizeScores(rawScores = {}) {
     const scorer = scorers[key];
     if (!scorer) continue;
     try {
-      const value = Math.round(clamp(scorer(payload)));
+      const computed = scorer(payload);
+      // Final backstop: a domain score is shown to the user, drives their
+      // percentile and picks their training target, so a NaN escaping any
+      // individual formula must never reach them.
+      const value = Number.isFinite(computed) ? Math.round(clamp(computed)) : 0;
       out[key] = value;
       measured.push(value);
     } catch (error) {
