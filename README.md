@@ -47,12 +47,36 @@ re-scans you every seventh day so you can see whether it worked.
 
 
 
-### Optional: cloud sync and the AI coach
+## Running it
 
-Everything works without this. Copy `.env.local.example` to `.env.local` and add Firebase keys to
-enable cross-device sync and the Gemini-written coach briefing. Without keys, the coach falls back
-to a locally composed briefing built from the same report data, and the Firebase SDK is dropped
-from the bundle entirely.
+```bash
+npm install
+npm run dev
+```
+
+No configuration required. Everything — the scan, the report, the protocol,
+history — runs in the browser with no backend and no account.
+
+### The one optional extra
+
+`api/coach.js` is a Vercel serverless function that asks Claude to write your
+coach briefing. Set `ANTHROPIC_API_KEY` (server-side only — never `VITE_`
+prefixed, which would ship it to the browser) in `.env.local` or in Vercel's
+environment variables to enable it. Without a key the endpoint reports itself
+unavailable and the app falls back to a briefing composed locally from the same
+report data, so the panel is never empty.
+
+The key lives on the server and never reaches the client. The function
+validates and rebuilds its prompt from bounded numbers and our own domain
+labels, so nothing a browser sends can be injected into it, and it rate-limits
+per IP.
+
+## Your data
+
+There is no server-side copy of anyone's results. Everything lives in your
+browser's localStorage. Progress → Settings has **Export my data** and **Import
+a backup**, which is how you move between devices or recover after clearing
+site data.
 
 ## Honest limits
 

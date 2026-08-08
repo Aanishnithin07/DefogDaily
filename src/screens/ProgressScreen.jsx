@@ -3,13 +3,12 @@ import ChartBoundary from "../components/ChartBoundary";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  CloudUpload,
   Download,
   Flame,
   Lock,
-  LogOut,
   Keyboard,
   Trash2,
+  Upload,
   Trophy,
   Volume2,
   Vibrate,
@@ -20,14 +19,13 @@ import { percentileFor, ordinal } from "../lib/norms";
 import {
   clearAllData,
   exportData,
+  importData,
   levelForXp,
   liveStreak,
   setPrefs,
   useStore,
 } from "../lib/storage";
 import { fadeInUp, staggerContainer } from "../lib/motion";
-import { useAuth } from "../context/AuthContext";
-import { saveScore } from "../lib/firestore";
 import {
   Button,
   Card,
@@ -45,11 +43,11 @@ const TrendChart = lazy(() => import("../components/charts/TrendChart"));
 
 export default function ProgressScreen({ onBack, onDataCleared }) {
   const state = useStore();
-  const { currentUser, signInWithGoogle, logout, isConfigured } = useAuth();
   const toast = useToast();
   const [series, setSeries] = useState(["speed", "memory", "stroop", "spatial"]);
   const [confirmClear, setConfirmClear] = useState(false);
   const confirmTimer = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => () => {
     if (confirmTimer.current) window.clearTimeout(confirmTimer.current);
@@ -114,27 +112,38 @@ export default function ProgressScreen({ onBack, onDataCleared }) {
     toast.show("Your data has been downloaded");
   };
 
-  const handleCloudSync = async () => {
-    if (!isConfigured) {
-      toast.show("Cloud sync needs Firebase keys in .env — everything else still works");
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  /**
+   * Export/import is how you move between devices now that there is no cloud
+   * account. It is also the escape hatch if a browser clears site data.
+   */
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    // Reset immediately so re-picking the same file fires change again.
+    event.target.value = "";
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.show("That file is too large to be a DefogDaily backup");
       return;
     }
+
     try {
-      if (!currentUser) {
-        await signInWithGoogle();
-        toast.show("Signed in. Future scans will sync.");
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !parsed.profile) {
+        toast.show("That does not look like a DefogDaily backup");
         return;
       }
-      const latest = state.sessions[state.sessions.length - 1];
-      if (latest) {
-        await saveScore(currentUser.uid, latest.metrics ?? {}, latest.scores ?? {});
-        toast.show("Latest scan backed up");
-      }
-    } catch (error) {
-      console.error("Cloud sync failed", error);
-      toast.show("Sync failed — your local data is untouched");
+      importData(text);
+      onDataCleared?.();
+      toast.show("Backup restored");
+    } catch {
+      toast.show("Could not read that file — is it the exported JSON?");
     }
   };
+
 
   return (
     <motion.div
@@ -436,14 +445,17 @@ export default function ProgressScreen({ onBack, onDataCleared }) {
             <Button variant="secondary" size="sm" icon={Download} onClick={handleExport}>
               Export my data
             </Button>
-            <Button variant="secondary" size="sm" icon={CloudUpload} onClick={handleCloudSync}>
-              {currentUser ? "Back up to cloud" : "Sign in to sync"}
+            <Button variant="secondary" size="sm" icon={Upload} onClick={handleImportClick}>
+              Import a backup
             </Button>
-            {currentUser && (
-              <Button variant="ghost" size="sm" icon={LogOut} onClick={logout}>
-                Sign out
-              </Button>
-            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportFile}
+              className="sr-only"
+              aria-label="Import a DefogDaily backup file"
+            />
             <Button
               variant={confirmClear ? "danger" : "ghost"}
               size="sm"

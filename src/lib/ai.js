@@ -1,73 +1,26 @@
-import { getFirebaseApp, isConfigured } from "./firebase";
 import { DOMAINS } from "./domains";
 
 /**
- * The Defog Coach.
+ * The Defog Coach, client side.
  *
- * When Firebase AI Logic is configured it writes a personalised briefing from
- * the full report. When it is not — which is the default for anyone who just
- * clones this repo — it falls back to a locally composed briefing built from
- * the same report data. The panel is never a dead end, and the free experience
- * never depends on a key.
+ * Posts the report's numbers to our own /api/coach function, which holds the
+ * API key and talks to Claude. If that endpoint is unconfigured, rate-limited,
+ * or unreachable, we fall back to a briefing composed locally from the same
+ * report — so the panel always says something useful and the free experience
+ * never depends on a key existing.
  */
 
-let modelPromise = null;
+const REQUEST_TIMEOUT_MS = 20_000;
 
-/** Loads the Firebase AI SDK on first use so it stays out of the initial bundle. */
-const loadModel = () => {
-  if (!isConfigured) return Promise.resolve(null);
-  if (!modelPromise) {
-    modelPromise = Promise.all([getFirebaseApp(), import("firebase/ai")])
-      .then(([app, mod]) => {
-        if (!app) return null;
-        const ai = mod.getAI(app, { backend: new mod.GoogleAIBackend() });
-        return mod.getGenerativeModel(ai, {
-          model: "gemini-2.5-flash-lite",
-          generationConfig: { temperature: 0.65, maxOutputTokens: 420 },
-        });
-      })
-      .catch((error) => {
-        console.error("Firebase AI Logic initialization error:", error);
-        modelPromise = null;
-        return null;
-      });
-  }
-  return modelPromise;
-};
-
-const buildPrompt = (report) => {
-  const domainLines = report.domains
-    .map(
-      (d) =>
-        `- ${d.label}: ${d.score}/100 (${d.percentileLabel} percentile, ${d.tier.label})`
-    )
-    .join("\n");
-
-  const findingLines = report.findings.length
-    ? report.findings
-        .slice(0, 4)
-        .map((f) => `- [${f.severity}] ${f.title} — ${f.evidence}`)
-        .join("\n")
-    : "- No failure patterns crossed threshold.";
-
-  return `You are the DefogDaily Coach. Clinical, specific, and encouraging without being soft. You are talking to someone who just finished a cognitive scan.
-
-COMPOSITE INDEX: ${report.index.index} (${report.index.percentile.toFixed(0)}th percentile)
-${report.cognitiveAge ? `ESTIMATED COGNITIVE AGE: ${report.cognitiveAge.years}` : ""}
-
-DOMAIN SCORES:
-${domainLines}
-
-DETECTED PATTERNS:
-${findingLines}
-
-Write three short paragraphs, no headings, no markdown, no emojis, no bullet points:
-1. What their profile actually says about how their mind works day to day. Reference the specific shape of their scores, not generic praise.
-2. The single most important thing to work on and why that specific weakness matters in real life.
-3. One concrete action they can take today. Be specific enough that they could do it in the next hour.
-
-Under 130 words total. Address them as "you". Do not restate the numbers back to them — interpret them.`;
-};
+/**
+ * Once we learn the coach endpoint isn't there, stop asking.
+ *
+ * The panel renders on both the results screen and the report screen, so
+ * without this a visitor with no key configured — or anyone running `vite dev`,
+ * where the serverless function simply does not exist — fires a doomed request
+ * every time they navigate. One failed probe per page load is enough.
+ */
+let coachUnavailable = false;
 
 /** Deterministic briefing composed from the report. No network required. */
 const localBriefing = (report) => {
@@ -100,7 +53,7 @@ const localBriefing = (report) => {
     parts.push(
       `The thing to work on is ${weakest.label}, sitting at the ${weakest.percentileLabel} percentile. ${
         topFinding
-          ? topFinding.whatItMeans.split(". ")[0] + "."
+          ? `${topFinding.whatItMeans.split(". ")[0]}.`
           : `In practice this is what makes ${
               DOMAINS[weakest.key]?.realWorld?.[0]?.toLowerCase() ?? "certain tasks"
             } cost you more effort than they should.`
@@ -119,22 +72,64 @@ const localBriefing = (report) => {
   return parts.join("\n\n");
 };
 
-export const generateCoachInsight = async (report) => {
-  if (!report?.index) return "Run a scan to get your briefing.";
+/** Only numbers and our own finding titles leave the browser. */
+const toPayload = (report) => ({
+  index: report.index?.index ?? null,
+  scores: Object.fromEntries(report.domains.map((d) => [d.key, d.score])),
+  percentiles: Object.fromEntries(report.domains.map((d) => [d.key, d.percentile])),
+  findings: (report.findings ?? []).slice(0, 4).map((f) => ({
+    title: f.title,
+    severity: f.severity,
+  })),
+});
 
-  const model = await loadModel();
-  if (!model) return localBriefing(report);
+/**
+ * @returns {Promise<{ text: string, source: "ai"|"local" }>}
+ */
+export const generateCoachInsight = async (report) => {
+  if (!report?.index) {
+    return { text: "Run a scan to get your briefing.", source: "local" };
+  }
+
+  if (coachUnavailable) {
+    return { text: localBriefing(report), source: "local" };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const result = await model.generateContent(buildPrompt(report));
-    const response = await result.response;
-    const text = response.text().trim();
-    return text || localBriefing(report);
-  } catch (err) {
-    console.error("AI Coach generation failed, using local briefing:", err);
-    return localBriefing(report);
+    const response = await fetch("/api/coach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toPayload(report)),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      // 501 = no key configured (the default for anyone who clones this repo).
+      // 404 = running the Vite dev server, which does not serve /api.
+      // Both are permanent for this page load, so stop probing. A 429 or 5xx
+      // is transient, so leave the door open for the next scan.
+      if (response.status === 501 || response.status === 404) {
+        coachUnavailable = true;
+      } else {
+        console.warn(`Coach unavailable (${response.status}) — using local briefing.`);
+      }
+      return { text: localBriefing(report), source: "local" };
+    }
+
+    const data = await response.json();
+    if (!data?.text) return { text: localBriefing(report), source: "local" };
+    return { text: data.text, source: "ai" };
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      console.warn("Coach request failed — using local briefing.", error);
+    }
+    return { text: localBriefing(report), source: "local" };
+  } finally {
+    clearTimeout(timeout);
   }
 };
 
-export const isAiConfigured = () => isConfigured;
 export { localBriefing };

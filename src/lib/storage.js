@@ -1,8 +1,8 @@
 /**
  * Local-first persistence. Everything DefogDaily offers works with zero signup
- * and zero backend — Firebase is a sync bonus, never a gate. This module owns
- * the whole client-side store and exposes a tiny subscribe API so React can
- * read it through useSyncExternalStore.
+ * and zero backend — there is no server-side copy of anyone's results, by
+ * design. This module owns the whole client-side store and exposes a tiny
+ * subscribe API so React can read it through useSyncExternalStore.
  */
 
 import { useSyncExternalStore } from "react";

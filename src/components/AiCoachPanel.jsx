@@ -1,25 +1,27 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
-import { generateCoachInsight, isAiConfigured } from "../lib/ai";
+import { generateCoachInsight } from "../lib/ai";
 import { Card } from "./ui";
 
 /**
- * The coach briefing. Uses Firebase AI Logic when configured, and a locally
- * composed briefing built from the same report when it is not — so the panel
- * always says something useful, key or no key.
+ * The coach briefing. Asks our own /api/coach function for a written briefing
+ * and falls back to a locally composed one whenever that is unavailable — so
+ * the panel is never empty, with or without an API key.
  */
 export default function AiCoachPanel({ report }) {
   const [insight, setInsight] = useState("");
+  const [source, setSource] = useState("local");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
 
-    generateCoachInsight(report).then((text) => {
+    generateCoachInsight(report).then((result) => {
       if (!alive) return;
-      setInsight(text);
+      setInsight(result.text);
+      setSource(result.source);
       setLoading(false);
     });
 
@@ -40,14 +42,14 @@ export default function AiCoachPanel({ report }) {
 
       <div className="flex items-start gap-4">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl-soft border border-accent-violet/25 bg-accent-violet/10">
-          <Sparkles className="h-4.5 w-4.5 text-accent-violet" aria-hidden="true" />
+          <Sparkles className="h-4 w-4 text-accent-violet" aria-hidden="true" />
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display text-base text-text-primary">Defog Coach</h3>
             <span className="text-2xs uppercase tracking-wider text-text-tertiary">
-              {isAiConfigured() ? "AI briefing" : "Rule-based briefing"}
+              {loading ? "Reading your trials…" : source === "ai" ? "Written for you" : "Rule-based briefing"}
             </span>
           </div>
 
@@ -56,7 +58,6 @@ export default function AiCoachPanel({ report }) {
               <div className="skeleton h-3.5 w-full" />
               <div className="skeleton h-3.5 w-11/12" />
               <div className="skeleton h-3.5 w-4/6" />
-              <p className="pt-1 text-2xs text-text-tertiary">Reading your trial data…</p>
             </div>
           ) : (
             <motion.div

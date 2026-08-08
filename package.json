@@ -10,9 +10,9 @@
     "lint": "eslint src --ext .js,.jsx"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
-    "firebase": "^12.16.0",
     "framer-motion": "^11.2.10",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.395.0",

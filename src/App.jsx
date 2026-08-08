@@ -9,7 +9,6 @@ import TrainScreen from "./screens/TrainScreen";
 import PracticeScreen from "./screens/PracticeScreen";
 import ProgressScreen from "./screens/ProgressScreen";
 import Aurora from "./components/ui/Aurora";
-import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Button } from "./components/ui";
 import { SCAN_MODES, DOMAINS } from "./lib/domains";
 import { buildReport } from "./lib/report";
@@ -17,7 +16,6 @@ import { extractMetrics } from "./lib/metrics";
 import { newlyEarned } from "./lib/achievements";
 import { getState, markPlanTask, recordSession, unlockAchievements, useStore } from "./lib/storage";
 import { useRoute } from "./lib/router";
-import { saveScore } from "./lib/firestore";
 import { primeAudio } from "./lib/feedback";
 
 class RootErrorBoundary extends Component {
@@ -152,7 +150,6 @@ function AppInner() {
   });
   const [result, setResult] = useState(null);
   const [sessionMeta, setSessionMeta] = useState(null);
-  const { currentUser } = useAuth();
 
   const lastScan = useStore((s) => s.lastScan);
   const plan = useStore((s) => s.plan);
@@ -295,10 +292,6 @@ function AppInner() {
         markPlanTask(scanConfig.planTask.planDay, scanConfig.planTask.taskId, true);
       }
 
-      if (currentUser) {
-        saveScore(currentUser.uid, metrics, finished.scores).catch(() => {});
-      }
-
       setResult({ ...finished, isDrill });
       setScanConfig((c) => ({ ...c, started: false }));
       setSessionMeta({
@@ -317,7 +310,7 @@ function AppInner() {
       // still sees result === null and bounces straight back to the landing
       // page — losing the run the user just spent minutes on.
     },
-    [currentUser, scanConfig.domains, scanConfig.planTask]
+    [scanConfig.domains, scanConfig.planTask]
   );
 
   useEffect(() => {
@@ -461,10 +454,8 @@ function AppInner() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RootErrorBoundary>
-        <AppInner />
-      </RootErrorBoundary>
-    </AuthProvider>
+    <RootErrorBoundary>
+      <AppInner />
+    </RootErrorBoundary>
   );
 }
