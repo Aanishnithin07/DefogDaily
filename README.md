@@ -1,6 +1,6 @@
 # DefogDaily
 
-Human memory intelligence and benchmark platform.
+Human memory intelligence and benchmark platform..
 
 **Find out exactly where your mind is weak. Then fix it.** Free, forever, for everyone.
 
@@ -11,7 +11,7 @@ here is the sort of thing other apps put behind a subscription.
 Runs entirely in your browser. No account, no server, no tracking.
 
 ## What it measures
-
+ 
 | Domain | Paradigm | What it tells you |
 | --- | --- | --- |
 | Processing Speed | Odd/even choice reaction | Decision throughput and how steady it stays |
